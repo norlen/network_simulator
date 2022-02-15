@@ -9,12 +9,6 @@ public class Node extends SimEnt {
     private int _sentmsg = 0;
     private int _seq = 0;
 
-    // Estimated jitter calculated using the algorithm described in RFC 1889.
-    private double _estimatedJitter = 0.0;
-
-    // Difference in time between packet sent and current time for the last packet.
-    private double _transit = 0.0;
-
     public Node(int network, int node) {
         super();
         _id = new NetworkAddr(network, node);
@@ -65,25 +59,7 @@ public class Node extends SimEnt {
             }
         }
         if (ev instanceof Message) {
-            System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " receives message with seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
-
-            // Run jitter estimation.
-            // updateJitterEstimation(SimEngine.getTime(), ((Message) ev).getTimestamp());
-            // System.out.println("Node estimated jitter: " + _estimatedJitter);
+            //System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " receives message with seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
         }
-    }
-
-    /**
-     * Updates the jitter estimation using algorithm described in RFC 1889, under section A.8 Estimating the
-     * Interarrival Jitter (https://datatracker.ietf.org/doc/html/rfc1889#appendix-A.8).
-     *
-     * @param arrivalTime     the current time.
-     * @param packetTimestamp timestamp of the incoming packet.
-     */
-    private void updateJitterEstimation(double arrivalTime, double packetTimestamp) {
-        double transit = arrivalTime - packetTimestamp;
-        double d = transit - _transit;
-        _transit = transit;
-        _estimatedJitter += (1.0 / 16.0) * (Math.abs(d) - _estimatedJitter);
     }
 }
