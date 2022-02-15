@@ -1,7 +1,6 @@
 package Sim.Traffic;
 
-import Sim.Message;
-import Sim.SimEngine;
+import Sim.*;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -12,7 +11,7 @@ import java.util.HashMap;
  * <p>
  * Can also save results in a CSV file for further processing.
  */
-public class TrafficSink {
+public class TrafficSink extends Node {
     // Stores time between packets and how many packets that have that key.
     private HashMap<Integer, Integer> _timeBetweenPackets = new HashMap<Integer, Integer>();
 
@@ -24,23 +23,35 @@ public class TrafficSink {
 
     /**
      * Instantiates a new Traffic Sink.
+     *
+     * @param network Sink network id.
+     * @param node    Sink node id.
      */
-    public TrafficSink() {
+    public TrafficSink(int network, int node) {
+        super(network, node);
     }
 
     /**
-     * @param msg Message event to process.
+     * Handle incoming events. Processes incoming messages and stores statistics.
+     *
+     * @param src SimEnt entity that sent the event.
+     * @param ev  Event to be processed.
      */
-    public void processMessage(Message msg) {
-        if (_lastMessage != null) {
-            double timeDifference = SimEngine.getTime() - _lastRecvTime;
-            int millis = (int) timeDifference;
+    @Override
+    public void recv(SimEnt src, Event ev) {
+        if (ev instanceof Message) {
+            System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " receives message with seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
 
-            int packets = _timeBetweenPackets.getOrDefault(millis, 0);
-            _timeBetweenPackets.put(millis, packets + 1);
+            if (_lastMessage != null) {
+                double timeDifference = SimEngine.getTime() - _lastRecvTime;
+                int millis = (int) timeDifference;
+
+                int packets = _timeBetweenPackets.getOrDefault(millis, 0);
+                _timeBetweenPackets.put(millis, packets + 1);
+            }
+            _lastRecvTime = SimEngine.getTime();
+            _lastMessage = (Message) ev;
         }
-        _lastRecvTime = SimEngine.getTime();
-        _lastMessage = msg;
     }
 
     /**

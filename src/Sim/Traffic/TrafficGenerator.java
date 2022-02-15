@@ -9,9 +9,6 @@ import Sim.*;
  * received packet is forwarded to the given sink.
  */
 public class TrafficGenerator extends Node {
-    // Sink that processes all incoming messages.
-    private final TrafficSink _sink;
-
     // How many packets to send for each `StartSending` call.
     private int _packetsToSend = 0;
 
@@ -32,7 +29,6 @@ public class TrafficGenerator extends Node {
      */
     public TrafficGenerator(int network, int node) {
         super(network, node);
-        _sink = new TrafficSink();
     }
 
     /**
@@ -66,13 +62,12 @@ public class TrafficGenerator extends Node {
                 _seq++;
                 send(_peer, message, 0);
 
-                int nextSendTime = getNextSendTime();
+                double nextSendTime = getNextSendTime();
                 send(this, new TimerEvent(), nextSendTime);
                 System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " sent message with seq: " + _seq + " at time " + SimEngine.getTime());
             }
         }
         if (ev instanceof Message) {
-            _sink.processMessage((Message) ev);
             System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " receives message with seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
         }
     }
@@ -82,16 +77,7 @@ public class TrafficGenerator extends Node {
      *
      * @return the delay in milliseconds when the next packet should be sent.
      */
-    protected int getNextSendTime() {
+    protected double getNextSendTime() {
         return 1;
-    }
-
-    /**
-     * Returns the Traffic Sink that is associated with this Traffic Generator.
-     *
-     * @return Traffic Sink associates with this generator.
-     */
-    public TrafficSink getSink() {
-        return _sink;
     }
 }

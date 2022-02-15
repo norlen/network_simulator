@@ -25,7 +25,7 @@ public class ConstantBitRate extends TrafficGenerator {
      * @return Delay until the next packet should be sent.
      */
     @Override
-    protected int getNextSendTime() {
+    protected double getNextSendTime() {
         return _timeBetweenSending;
     }
 }

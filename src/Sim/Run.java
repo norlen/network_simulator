@@ -2,10 +2,9 @@ package Sim;
 
 // An example of how to build a topology and starting the simulation engine
 
-import Sim.Traffic.ConstantBitRate;
-import Sim.Traffic.Gaussian;
-import Sim.Traffic.Poisson;
-import Sim.Traffic.TrafficGenerator;
+import Sim.Traffic.*;
+
+import java.util.Date;
 
 enum TrafficGeneratorType {
     NONE,
@@ -16,8 +15,9 @@ enum TrafficGeneratorType {
 
 public class Run {
     public static void main(String[] args) {
-        boolean useLossyLinks = true;
+        boolean useLossyLinks = false;
         TrafficGeneratorType trafficGeneratorType = TrafficGeneratorType.GAUSSIAN;
+        int packetsToSend = 1_000_000;
 
         // Creates two links.
         Link link1, link2;
@@ -31,7 +31,6 @@ public class Run {
             link2 = new Link();
         }
 
-
         // Create two end hosts that will be communicating via the router
         Node host1, host2;
         if (trafficGeneratorType == TrafficGeneratorType.NONE) {
@@ -39,13 +38,13 @@ public class Run {
             host2 = new Node(2, 1);
         } else if (trafficGeneratorType == TrafficGeneratorType.CBR) {
             host1 = new ConstantBitRate(1, 1, 10);
-            host2 = new ConstantBitRate(2, 1, 10);
+            host2 = new TrafficSink(2, 1);
         } else if (trafficGeneratorType == TrafficGeneratorType.GAUSSIAN) {
-            host1 = new Gaussian(1, 1);
-            host2 = new Gaussian(2, 1);
+            host1 = new Gaussian(1, 1, 100, 15);
+            host2 = new TrafficSink(2, 1);
         } else {
-            host1 = new Poisson(1, 1);
-            host2 = new Poisson(2, 1);
+            host1 = new Poisson(1, 1, 100);
+            host2 = new TrafficSink(2, 1);
         }
 
         // Connect links to hosts
@@ -66,13 +65,11 @@ public class Run {
         // host2 will send 2 messages with time interval 10 to network 1, node 1. Sequence starts with number 10
 
         if (trafficGeneratorType == TrafficGeneratorType.NONE) {
-            // host1.StartSending();
-            // host2.StartSending(1, 1, 2, 10, 10);
+            host1.StartSending(2, 2, 10, 5, 1);
+            host2.StartSending(1, 1, 2, 10, 10);
         } else {
             var h1 = (TrafficGenerator) host1;
-            var h2 = (TrafficGenerator) host2;
-            h1.StartSending(new NetworkAddr(2, 2), 1000000, 1);
-            h2.StartSending(new NetworkAddr(1, 1), 1000000, 1);
+            h1.StartSending(new NetworkAddr(2, 2), packetsToSend, 1);
         }
 
         // Start the simulation engine and of we go!
@@ -87,19 +84,27 @@ public class Run {
 
         if (trafficGeneratorType != TrafficGeneratorType.NONE) {
             // Output results from sink.
-            var h1 = (TrafficGenerator) host1;
-            var h2 = (TrafficGenerator) host2;
+            var h2 = (TrafficSink) host2;
+            String filename = trafficGeneratorType.toString();
+            if (useLossyLinks) {
+                filename += "_lossy";
+            }
+            filename += "_" + (new Date()).getTime();
 
-            String host1Name = "host1_" + trafficGeneratorType;
-            if (useLossyLinks) {
-                host1Name += "_lossy";
+            String suffix = "";
+            while (packetsToSend % 1000 == 0) {
+                if (suffix == "") {
+                    suffix = "k";
+                } else if (suffix == "k") {
+                    suffix = "m";
+                } else {
+                    break;
+                }
+                packetsToSend /= 1000;
             }
-            String host2Name = "host2_" + trafficGeneratorType;
-            if (useLossyLinks) {
-                host2Name += "_lossy";
-            }
-            h1.getSink().saveResults(host1Name);
-            h2.getSink().saveResults(host2Name);
+            filename += "_pkts_" + packetsToSend + suffix;
+            filename += ".txt";
+            h2.saveResults(filename);
         }
     }
 }
