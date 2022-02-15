@@ -3,13 +3,17 @@ package Sim;
 // This class implements a node (host) it has an address, a peer that it communicates with
 // and it count messages send and received.
 
-import Sim.Traffic.SendMessageEvent;
-
 public class Node extends SimEnt {
-    private NetworkAddr _id;
-    private SimEnt _peer;
+    protected NetworkAddr _id;
+    protected SimEnt _peer;
     private int _sentmsg = 0;
     private int _seq = 0;
+
+    // Estimated jitter calculated using the algorithm described in RFC 1889.
+    private double _estimatedJitter = 0.0;
+
+    // Difference in time between packet sent and current time for the last packet.
+    private double _transit = 0.0;
 
     public Node(int network, int node) {
         super();
@@ -51,14 +55,6 @@ public class Node extends SimEnt {
     // This method is called upon that an event destined for this node triggers.
 
     public void recv(SimEnt src, Event ev) {
-        if (ev instanceof SendMessageEvent) {
-            var sendMessageEvent = (SendMessageEvent) ev;
-            _sentmsg += 1;
-            var message = new Message(_id, sendMessageEvent._dst, _seq);
-            send(_peer, message, sendMessageEvent._delay);
-            System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " sent message with seq: " + _seq + " at time " + SimEngine.getTime());
-            _seq++;
-        }
         if (ev instanceof TimerEvent) {
             if (_stopSendingAfter > _sentmsg) {
                 _sentmsg++;
@@ -71,6 +67,23 @@ public class Node extends SimEnt {
         if (ev instanceof Message) {
             System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " receives message with seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
 
+            // Run jitter estimation.
+            // updateJitterEstimation(SimEngine.getTime(), ((Message) ev).getTimestamp());
+            // System.out.println("Node estimated jitter: " + _estimatedJitter);
         }
+    }
+
+    /**
+     * Updates the jitter estimation using algorithm described in RFC 1889, under section A.8 Estimating the
+     * Interarrival Jitter (https://datatracker.ietf.org/doc/html/rfc1889#appendix-A.8).
+     *
+     * @param arrivalTime     the current time.
+     * @param packetTimestamp timestamp of the incoming packet.
+     */
+    private void updateJitterEstimation(double arrivalTime, double packetTimestamp) {
+        double transit = arrivalTime - packetTimestamp;
+        double d = transit - _transit;
+        _transit = transit;
+        _estimatedJitter += (1.0 / 16.0) * (Math.abs(d) - _estimatedJitter);
     }
 }

@@ -5,7 +5,7 @@ import java.util.Random;
 /**
  * LossyLink is a Link that can drop packets, introduce delay for each packet, and have jitter so the delay for each
  * packet differs.
- *
+ * <p>
  * The delay is modelled such that the total delay for a packet is the delay added with a random value evenly
  * distributed in [0, jitter). This makes the delay the best case delay, i.e. the network is free for only us to use.
  */
@@ -31,8 +31,8 @@ public class LossyLink extends Link {
     /**
      * Instantiates a new LossyLink with the given settings.
      *
-     * @param delay best case delay for each packet.
-     * @param jitter random value added to the delay.
+     * @param delay           best case delay for each packet.
+     * @param jitter          random value added to the delay.
      * @param dropProbability probability that a packet is dropped in [0, 1].
      */
     public LossyLink(double delay, double jitter, double dropProbability) {
@@ -45,26 +45,25 @@ public class LossyLink extends Link {
 
     /**
      * Handles receiving an event. Currently, only handles incoming messages.
-     *
+     * <p>
      * When handling a message it introduces a delay and jitter, or drops the packet based off the values passed during
      * construction. It also updates the jitter estimate.
      *
      * @param src SimEnt that sent the event.
-     * @param ev incoming event.
+     * @param ev  incoming event.
      */
     public void recv(SimEnt src, Event ev) {
         if (ev instanceof Message) {
             if (shouldDropPacket()) {
-                System.out.println("Link drop incoming packet: ");
+                System.out.println("== Link drop packet: ");
                 return;
             }
 
-            // Run jitter estimation.
-            updateJitterEstimation(SimEngine.getTime(), ((Message)ev).getTimestamp());
+            updateJitterEstimation(SimEngine.getTime(), ((Message) ev).getTimestamp());
             System.out.println("Link estimated jitter: " + _estimatedJitter);
 
             double delay = getDelay();
-            System.out.println("Link recv msg, delay: " + delay);
+            System.out.println("-- Link recv msg, delay: " + delay);
             if (src == _connectorA) {
                 send(_connectorB, ev, delay);
             } else {
@@ -75,8 +74,9 @@ public class LossyLink extends Link {
 
     /**
      * Checks if a packet should be dropped.
-     *
+     * <p>
      * Generates a random value and compares to the drop probability.
+     *
      * @return true if the packet should be dropped, false otherwise.
      */
     private boolean shouldDropPacket() {
@@ -98,7 +98,7 @@ public class LossyLink extends Link {
      * Updates the jitter estimation using algorithm described in RFC 1889, under section A.8 Estimating the
      * Interarrival Jitter (https://datatracker.ietf.org/doc/html/rfc1889#appendix-A.8).
      *
-     * @param arrivalTime the current time.
+     * @param arrivalTime     the current time.
      * @param packetTimestamp timestamp of the incoming packet.
      */
     private void updateJitterEstimation(double arrivalTime, double packetTimestamp) {

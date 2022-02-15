@@ -6,22 +6,19 @@ package Sim;
 // the host part.
 
 public class NetworkAddr {
-	private int _networkId;
-	private int _nodeId;
-	
-	NetworkAddr(int network, int node)
-	{
-		_networkId=network;
-		_nodeId=node;
-	}
-	
-	public int networkId()
-	{
-		return _networkId;
-	}
-	
-	public int nodeId()
-	{
-		return _nodeId;
-	}
+    private int _networkId;
+    private int _nodeId;
+
+    public NetworkAddr(int network, int node) {
+        _networkId = network;
+        _nodeId = node;
+    }
+
+    public int networkId() {
+        return _networkId;
+    }
+
+    public int nodeId() {
+        return _nodeId;
+    }
 }
