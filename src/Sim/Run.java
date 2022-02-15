@@ -102,7 +102,7 @@ public class Run {
             }
             filename += "_pkts_" + packetsToSend + suffix;
             filename += "_" + (new Date()).getTime();
-            filename += ".txt";
+            filename += ".csv";
             h2.saveResults(filename);
         }
     }
