@@ -13,7 +13,7 @@ import java.util.HashMap;
  */
 public class TrafficSink extends Node {
     // Stores time between packets and how many packets that have that key.
-    private HashMap<Integer, Integer> _timeBetweenPackets = new HashMap<Integer, Integer>();
+    private final HashMap<Integer, Integer> _timeBetweenPackets = new HashMap<>();
 
     // Last received message.
     private Message _lastMessage = null;

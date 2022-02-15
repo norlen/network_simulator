@@ -11,13 +11,13 @@ enum TrafficGeneratorType {
     CBR,
     GAUSSIAN,
     POISSON,
-};
+}
 
 public class Run {
     public static void main(String[] args) {
         boolean useLossyLinks = false;
-        TrafficGeneratorType trafficGeneratorType = TrafficGeneratorType.GAUSSIAN;
-        int packetsToSend = 1_000_000;
+        TrafficGeneratorType trafficGeneratorType = TrafficGeneratorType.POISSON;
+        int packetsToSend = 500_000;
 
         // Creates two links.
         Link link1, link2;
@@ -89,13 +89,11 @@ public class Run {
             if (useLossyLinks) {
                 filename += "_lossy";
             }
-            filename += "_" + (new Date()).getTime();
-
             String suffix = "";
             while (packetsToSend % 1000 == 0) {
-                if (suffix == "") {
+                if (suffix.equals("")) {
                     suffix = "k";
-                } else if (suffix == "k") {
+                } else if (suffix.equals("k")) {
                     suffix = "m";
                 } else {
                     break;
@@ -103,6 +101,7 @@ public class Run {
                 packetsToSend /= 1000;
             }
             filename += "_pkts_" + packetsToSend + suffix;
+            filename += "_" + (new Date()).getTime();
             filename += ".txt";
             h2.saveResults(filename);
         }

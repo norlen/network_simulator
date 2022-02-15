@@ -6,7 +6,7 @@ import java.util.Random;
  * Traffic Generator that sends packets with a delay from a Poisson distribution.
  */
 public class Poisson extends TrafficGenerator {
-    private Random _generator = new Random();
+    private final Random _generator = new Random();
 
     // Lambda value when sampling the Poisson distribution.
     private final int _lambda;

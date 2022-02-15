@@ -6,7 +6,7 @@ import java.util.Random;
  * Traffic Generator that sends packets from a Gaussian distribution.
  */
 public class Gaussian extends TrafficGenerator {
-    private Random _generator = new Random();
+    private final Random _generator = new Random();
 
     // Mean of the Gaussian distribution.
     private final double _mean;
@@ -36,7 +36,6 @@ public class Gaussian extends TrafficGenerator {
      */
     @Override
     protected double getNextSendTime() {
-        double delay = _generator.nextGaussian(_mean, _stddev);
-        return (int) delay;
+        return _generator.nextGaussian(_mean, _stddev);
     }
 }
