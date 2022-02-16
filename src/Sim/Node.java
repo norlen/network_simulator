@@ -2,7 +2,6 @@ package Sim;
 
 // This class implements a node (host) it has an address, a peer that it communicates with
 // and it count messages send and received.
-
 public class Node extends SimEnt {
     protected NetworkAddr _id;
     protected SimEnt _peer;
@@ -47,7 +46,6 @@ public class Node extends SimEnt {
     //**********************************************************************************
 
     // This method is called upon that an event destined for this node triggers.
-
     public void recv(SimEnt src, Event ev) {
         if (ev instanceof TimerEvent) {
             if (_stopSendingAfter > _sentmsg) {
