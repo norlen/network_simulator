@@ -19,6 +19,9 @@ public class LossyLink extends Link {
     // Probability that a packet should be dropped.
     private final double _dropProbability;
 
+    // Number of packets this link has dropped.
+    private int _numDroppedPackets = 0;
+
     // Random number generator to randomize jitter.
     private final Random _generator;
 
@@ -38,6 +41,15 @@ public class LossyLink extends Link {
     }
 
     /**
+     * Returns the number of dropped packets since the link was created.
+     *
+     * @return the number of dropped packets.
+     */
+    public int getNumDroppedPackets() {
+        return _numDroppedPackets;
+    }
+
+    /**
      * Handles receiving an event. Currently, only handles incoming messages.
      * <p>
      * When handling a message it introduces a delay and jitter, or drops the packet based off the values passed during
@@ -50,6 +62,7 @@ public class LossyLink extends Link {
         if (ev instanceof Message) {
             if (shouldDropPacket()) {
                 System.out.println("== Link drop packet: ");
+                _numDroppedPackets += 1;
                 return;
             }
 
@@ -71,8 +84,7 @@ public class LossyLink extends Link {
      * @return true if the packet should be dropped, false otherwise.
      */
     private boolean shouldDropPacket() {
-        double roll = _generator.nextDouble();
-        return roll < _dropProbability;
+        return _generator.nextDouble() < _dropProbability;
     }
 
     /**
@@ -81,7 +93,6 @@ public class LossyLink extends Link {
      * @return the delay for a packet in milliseconds.
      */
     private double getDelay() {
-        double jitter = _generator.nextDouble() * _jitter;
-        return _generator.nextDouble(_delay - jitter, _delay + jitter);
+        return _generator.nextDouble(_delay - _jitter, _delay + _jitter);
     }
 }

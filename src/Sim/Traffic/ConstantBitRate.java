@@ -5,7 +5,7 @@ package Sim.Traffic;
  */
 public class ConstantBitRate extends TrafficGenerator {
     // How much time between each packet.
-    private int _timeBetweenSending;
+    private final int _timeBetweenSending;
 
     /**
      * Creates a new traffic generator that generates a stream of packets with a specific delay between each packet.

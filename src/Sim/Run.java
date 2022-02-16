@@ -17,14 +17,18 @@ public class Run {
     public static void main(String[] args) {
         boolean useLossyLinks = false;
         TrafficGeneratorType trafficGeneratorType = TrafficGeneratorType.POISSON;
-        int packetsToSend = 500_000;
+        int packetsToSend = 1_000_000;
+        int lossDelay = 100;
+        int lossJitter = 5;
+        double lossDrop = 0.05;
+        int arg = 1;
 
         // Creates two links.
         Link link1, link2;
         if (useLossyLinks) {
             // Use lossy links.
-            link1 = new LossyLink(100, 50, 0.25);
-            link2 = new LossyLink(100, 50, 0.25);
+            link1 = new LossyLink(lossDelay, lossJitter, lossDrop);
+            link2 = new LossyLink(lossDelay, lossJitter, lossDrop);
         } else {
             // Use regular links.
             link1 = new Link();
@@ -37,13 +41,13 @@ public class Run {
             host1 = new Node(1, 1);
             host2 = new Node(2, 1);
         } else if (trafficGeneratorType == TrafficGeneratorType.CBR) {
-            host1 = new ConstantBitRate(1, 1, 10);
+            host1 = new ConstantBitRate(1, 1, arg);
             host2 = new TrafficSink(2, 1);
         } else if (trafficGeneratorType == TrafficGeneratorType.GAUSSIAN) {
-            host1 = new Gaussian(1, 1, 100, 15);
+            host1 = new Gaussian(1, 1, arg, 15);
             host2 = new TrafficSink(2, 1);
         } else {
-            host1 = new Poisson(1, 1, 100);
+            host1 = new Poisson(1, 1, arg);
             host2 = new TrafficSink(2, 1);
         }
 
@@ -85,9 +89,11 @@ public class Run {
         if (trafficGeneratorType != TrafficGeneratorType.NONE) {
             // Output results from sink.
             var h2 = (TrafficSink) host2;
-            String filename = trafficGeneratorType.toString();
+            String filename = trafficGeneratorType.toString() + "_" + arg;
             if (useLossyLinks) {
-                filename += "_lossy";
+                filename += "_lossy_d" + lossDelay + "_j" + lossJitter + "_p" + lossDrop;
+                int numDropped = ((LossyLink) link1).getNumDroppedPackets() + ((LossyLink) link2).getNumDroppedPackets();
+                filename += "_dropped_" + numDropped;
             }
             String suffix = "";
             while (packetsToSend % 1000 == 0) {
@@ -103,7 +109,7 @@ public class Run {
             filename += "_pkts_" + packetsToSend + suffix;
             filename += "_" + (new Date()).getTime();
             filename += ".csv";
-            h2.saveResults(filename);
+            h2.saveTimeBetweenPackages(filename);
         }
     }
 }

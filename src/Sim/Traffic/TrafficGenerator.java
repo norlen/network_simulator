@@ -56,10 +56,10 @@ public class TrafficGenerator extends Node {
     public void recv(SimEnt src, Event ev) {
         if (ev instanceof TimerEvent) {
             if (_packetsToSend > _messagesSent) {
-                _messagesSent++;
+                _messagesSent += 1;
 
                 var message = new Message(_id, _dst, _seq);
-                _seq++;
+                _seq += 1;
                 send(_peer, message, 0);
 
                 double nextSendTime = getNextSendTime();

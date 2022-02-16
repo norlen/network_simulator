@@ -12,7 +12,6 @@ class SimTimeSlot implements Comparable {
         _msek = msek;
         _resolver = _discriminator;
         _discriminator++;
-
     }
 
     // This method is called when an event is scheduled to be inserted into

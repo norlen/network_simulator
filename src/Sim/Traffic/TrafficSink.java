@@ -4,7 +4,7 @@ import Sim.*;
 
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.TreeMap;
 
 /**
  * Traffic sink that processes incoming messages.
@@ -13,7 +13,7 @@ import java.util.HashMap;
  */
 public class TrafficSink extends Node {
     // Stores time between packets and how many packets that have that key.
-    private final HashMap<Integer, Integer> _timeBetweenPackets = new HashMap<>();
+    private final TreeMap<Integer, Integer> _timeBetweenPackets = new TreeMap<>();
 
     // Last received message.
     private Message _lastMessage = null;
@@ -39,18 +39,19 @@ public class TrafficSink extends Node {
      */
     @Override
     public void recv(SimEnt src, Event ev) {
-        if (ev instanceof Message) {
-            System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " receives message with seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
+        if (ev instanceof Message msg) {
+            System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " receives message with seq: " + msg.seq() + " at time " + SimEngine.getTime());
 
+            double currentTime = SimEngine.getTime();
             if (_lastMessage != null) {
-                double timeDifference = SimEngine.getTime() - _lastRecvTime;
-                int millis = (int) timeDifference;
+                double timeDifference = currentTime - _lastRecvTime;
+                int d = (int) timeDifference;
 
-                int packets = _timeBetweenPackets.getOrDefault(millis, 0);
-                _timeBetweenPackets.put(millis, packets + 1);
+                int packets = _timeBetweenPackets.getOrDefault(d, 0);
+                _timeBetweenPackets.put(d, packets + 1);
             }
-            _lastRecvTime = SimEngine.getTime();
-            _lastMessage = (Message) ev;
+            _lastRecvTime = currentTime;
+            _lastMessage = msg;
         }
     }
 
@@ -60,9 +61,9 @@ public class TrafficSink extends Node {
      *
      * @param filename File that save results in.
      */
-    public void saveResults(String filename) {
+    public void saveTimeBetweenPackages(String filename) {
         try (FileWriter writer = new FileWriter(filename)) {
-            writer.write("timeBetweenRecv,packets\n");
+            writer.write("delay,packets\n");
             for (var entry : _timeBetweenPackets.entrySet()) {
                 writer.write(entry.getKey().toString() + "," + entry.getValue().toString() + "\n");
             }
