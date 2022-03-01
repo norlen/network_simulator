@@ -3,9 +3,12 @@ package Sim.Messages.ICMPv6;
 import Sim.NetworkAddr;
 
 /**
- * Router advertisement
+ * Modified Router Advertisement for MobileIPv6.
+ * <p>
+ * The modified advertisement adds a home agent bit, signifying that the router acts as a home agent.
  * <p>
  * Reference: https://datatracker.ietf.org/doc/html/rfc4861#section-4.2
+ * https://datatracker.ietf.org/doc/html/rfc6275#section-7.1
  */
 public class RouterAdvertisement extends ICMPv6 {
     // While this message does contain multiple fields, we leave those out. Since we do not support those use-cases.

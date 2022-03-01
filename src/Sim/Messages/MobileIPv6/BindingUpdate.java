@@ -5,7 +5,7 @@ import Sim.NetworkAddr;
 /**
  * Binding Update is used to notify other nodes that the node has a new care-of-address.
  * <p>
- * Reference: https://datatracker.ietf.org/doc/html/rfc6275#section-6.1
+ * Reference: https://datatracker.ietf.org/doc/html/rfc6275#section-6.1.7
  */
 public class BindingUpdate extends MobilityHeader {
     public static final int MHType = 5;
