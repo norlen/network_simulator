@@ -4,7 +4,6 @@ package Sim;
 // the link connecting to an interface as well as the node 
 // connected to the other side of the link
 public class RouteTableEntry extends TableEntry {
-
     RouteTableEntry(SimEnt link, SimEnt node) {
         super(link, node);
     }
@@ -16,5 +15,4 @@ public class RouteTableEntry extends TableEntry {
     public SimEnt node() {
         return super.node();
     }
-
 }

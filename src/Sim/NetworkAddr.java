@@ -20,4 +20,9 @@ public class NetworkAddr {
     public int nodeId() {
         return _nodeId;
     }
+
+    @Override
+    public String toString() {
+        return _networkId + "." + _nodeId;
+    }
 }

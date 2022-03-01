@@ -10,12 +10,10 @@ public class ConstantBitRate extends TrafficGenerator {
     /**
      * Creates a new traffic generator that generates a stream of packets with a specific delay between each packet.
      *
-     * @param network            The node's network id.
-     * @param node               The node's id.
      * @param timeBetweenSending delay between each sent packet.
      */
-    public ConstantBitRate(int network, int node, int timeBetweenSending) {
-        super(network, node);
+    public ConstantBitRate(int packetsToSend, int timeBetweenSending) {
+        super(packetsToSend);
         _timeBetweenSending = timeBetweenSending;
     }
 
@@ -25,7 +23,7 @@ public class ConstantBitRate extends TrafficGenerator {
      * @return Delay until the next packet should be sent.
      */
     @Override
-    protected double getNextSendTime() {
+    public double getNextSendTime() {
         return _timeBetweenSending;
     }
 }

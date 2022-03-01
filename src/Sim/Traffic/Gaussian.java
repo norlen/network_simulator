@@ -17,13 +17,11 @@ public class Gaussian extends TrafficGenerator {
     /**
      * Instantiates a new traffic generator that generates a stream of packets with a delay from a Gaussian distribution.
      *
-     * @param network the node's network id.
-     * @param node    the node's id.
-     * @param mean    mean of the Gaussian distribution.
-     * @param stddev  standard deviation of the Gaussian distribution.
+     * @param mean   mean of the Gaussian distribution.
+     * @param stddev standard deviation of the Gaussian distribution.
      */
-    public Gaussian(int network, int node, double mean, double stddev) {
-        super(network, node);
+    public Gaussian(int packetsToSend, double mean, double stddev) {
+        super(packetsToSend);
         _mean = mean;
         _stddev = stddev;
     }
@@ -35,7 +33,7 @@ public class Gaussian extends TrafficGenerator {
      * @return delay in milliseconds until the next packet should be sent.
      */
     @Override
-    protected double getNextSendTime() {
+    public double getNextSendTime() {
         return _generator.nextGaussian(_mean, _stddev);
     }
 }

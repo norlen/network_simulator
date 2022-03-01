@@ -2,6 +2,9 @@ package Sim;
 
 // This class implements a simple router
 
+import Sim.Events.UpdateInterface;
+import Sim.Events.UpdateInterfaceAck;
+
 public class Router extends SimEnt {
     private RouteTableEntry[] _routingTable;
     private int _interfaces;
@@ -41,11 +44,42 @@ public class Router extends SimEnt {
 
     // When messages are received at the router this method is called
     public void recv(SimEnt source, Event event) {
-        if (event instanceof Message) {
-            System.out.println("Router handles packet with seq: " + ((Message) event).seq() + " from node: " + ((Message) event).source().networkId() + "." + ((Message) event).source().nodeId());
+        if (event instanceof Message ev) {
+            System.out.println("Router handles packet with seq: " + ev.seq() + " from node: " + ev.source().networkId() + "." + ev.source().nodeId());
             SimEnt sendNext = getInterface(((Message) event).destination().networkId());
-            System.out.println("Router sends to node: " + ((Message) event).destination().networkId() + "." + ((Message) event).destination().nodeId());
+            System.out.println("Router sends to node: " + ev.destination().networkId() + "." + ev.destination().nodeId());
             send(sendNext, event, _now);
         }
+
+        if (event instanceof UpdateInterface ev) {
+            System.out.println("== Router received a ChangeInterface packet from " + ev.getAddr() + " change interface to " + ev.getNewInterfaceId());
+            
+            var success = updateInterface(ev.getAddr(), ev.getNewInterfaceId());
+            var sendNext = getInterface(ev.getAddr().networkId());
+            var msg = new UpdateInterfaceAck(success, ev.getNewInterfaceId(), ev.getNetworkId());
+
+            send(sendNext, msg, _now);
+        }
+    }
+
+    private boolean updateInterface(NetworkAddr address, int newInterfaceId) {
+        if (_routingTable[newInterfaceId] != null) {
+            // Interface ID already in use.
+            return false;
+        }
+
+        for (int i = 0; i < _routingTable.length; i++) {
+            if (_routingTable[i] == null) continue;
+
+            var node = (Node) _routingTable[i].node();
+            if (node.getAddr().networkId() == address.networkId()) {
+                _routingTable[newInterfaceId] = _routingTable[i];
+                _routingTable[i] = null;
+                return true;
+            }
+        }
+
+        // Old interface not found.
+        return false;
     }
 }

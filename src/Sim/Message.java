@@ -7,13 +7,11 @@ public class Message implements Event {
     private NetworkAddr _source;
     private NetworkAddr _destination;
     private int _seq = 0;
-    private double _timestamp = 0.0;
 
     public Message(NetworkAddr from, NetworkAddr to, int seq) {
         _source = from;
         _destination = to;
         _seq = seq;
-        _timestamp = SimEngine.getTime();
     }
 
     public NetworkAddr source() {
@@ -28,11 +26,6 @@ public class Message implements Event {
         return _seq;
     }
 
-    public double getTimestamp() {
-        return _timestamp;
-    }
-
     public void entering(SimEnt locale) {
     }
 }
-	

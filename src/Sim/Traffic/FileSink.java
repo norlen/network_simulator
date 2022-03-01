@@ -1,6 +1,9 @@
 package Sim.Traffic;
 
-import Sim.*;
+import Sim.Event;
+import Sim.Message;
+import Sim.SimEngine;
+import Sim.SimEnt;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -11,7 +14,7 @@ import java.util.TreeMap;
  * <p>
  * Can also save results in a CSV file for further processing.
  */
-public class TrafficSink extends Node {
+public class FileSink implements Sink {
     // Stores time between packets and how many packets that have that key.
     private final TreeMap<Integer, Integer> _timeBetweenPackets = new TreeMap<>();
 
@@ -23,12 +26,8 @@ public class TrafficSink extends Node {
 
     /**
      * Instantiates a new Traffic Sink.
-     *
-     * @param network Sink network id.
-     * @param node    Sink node id.
      */
-    public TrafficSink(int network, int node) {
-        super(network, node);
+    public FileSink() {
     }
 
     /**
@@ -38,10 +37,8 @@ public class TrafficSink extends Node {
      * @param ev  Event to be processed.
      */
     @Override
-    public void recv(SimEnt src, Event ev) {
+    public void process(SimEnt src, Event ev) {
         if (ev instanceof Message msg) {
-            System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " receives message with seq: " + msg.seq() + " at time " + SimEngine.getTime());
-
             double currentTime = SimEngine.getTime();
             if (_lastMessage != null) {
                 double timeDifference = currentTime - _lastRecvTime;
