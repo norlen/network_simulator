@@ -9,9 +9,17 @@ import Sim.NetworkAddr;
  * Reference: https://datatracker.ietf.org/doc/html/rfc6275#section-6.1
  */
 public abstract class MobilityHeader extends Message {
-    // There are header fields here, but none that we use right now. The class exist IF we want to use any of these.
+    // This is not an exhaustive list of fields, see the reference for that. Only the used fields are present.
 
-    public MobilityHeader(NetworkAddr from, NetworkAddr to, int seq) {
+    // todo
+    private final int _mhType;
+
+    public MobilityHeader(NetworkAddr from, NetworkAddr to, int seq, int mhType) {
         super(from, to, seq);
+        _mhType = mhType;
+    }
+
+    public int getMHType() {
+        return _mhType;
     }
 }
