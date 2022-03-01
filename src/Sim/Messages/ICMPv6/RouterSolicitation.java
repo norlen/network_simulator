@@ -9,7 +9,13 @@ import Sim.NetworkAddr;
  */
 public class RouterSolicitation extends ICMPv6 {
 
+    // ICMP type for Router Solicitation.
+    public static final int ICMP_TYPE = 133;
+
+    // ICMP code for Router Solicitation.
+    public static final int ICMP_CODE = 0;
+
     public RouterSolicitation(NetworkAddr from, NetworkAddr to, int seq) {
-        super(from, to, seq, 133, 0);
+        super(from, to, seq, ICMP_TYPE, ICMP_CODE);
     }
 }

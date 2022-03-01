@@ -9,8 +9,14 @@ import Sim.NetworkAddr;
  */
 public class RouterAdvertisement extends ICMPv6 {
     // While this message does contain multiple fields, we leave those out. Since we do not support those use-cases.
-    
+
+    // ICMP type for Router Advertisement.
+    public static final int ICMP_TYPE = 134;
+
+    // ICMP code for Router Advertisement.
+    public static final int ICMP_CODE = 0;
+
     public RouterAdvertisement(NetworkAddr from, NetworkAddr to, int seq) {
-        super(from, to, seq, 134, 0);
+        super(from, to, seq, ICMP_TYPE, ICMP_CODE);
     }
 }
