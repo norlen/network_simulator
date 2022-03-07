@@ -2,6 +2,8 @@ package Sim;
 
 // This class implements a simple router
 
+import Sim.Events.Connected;
+import Sim.Events.Disconnected;
 import Sim.Events.EnterNetwork;
 import Sim.Events.LeaveNetwork;
 import Sim.Messages.ICMPv6.RouterAdvertisement;
@@ -21,13 +23,28 @@ public class Router extends SimEnt {
 
     // This method connects links to the router and also informs the
     // router of the host connects to the other end of the link
-    public void connectInterface(int interfaceNumber, SimEnt link, SimEnt node) {
+    public void connectInterface(int interfaceNumber, int networkId, Link link) {
         if (interfaceNumber < _interfaces) {
-            _routingTable[interfaceNumber] = new RouteTableEntry(link, node);
+            _routingTable[interfaceNumber] = new RouteTableEntry(networkId, link);
         } else {
             System.out.println("Trying to connect to port not in router");
         }
-        ((Link) link).setConnector(this);
+        link.setConnector(this);
+    }
+
+    /**
+     * Disconnect the interface having a certain network id.
+     *
+     * @param networkId
+     */
+    public void disconnectInterface(int networkId) {
+        for (int i = 0; i < _routingTable.length; i++) {
+            if (_routingTable[i] == null) continue;
+
+            if (_routingTable[i].getNetworkId() == networkId) {
+                _routingTable[i] = null;
+            }
+        }
     }
 
     // This method searches for an entry in the routing table that matches
@@ -37,7 +54,7 @@ public class Router extends SimEnt {
         SimEnt routerInterface = null;
         for (int i = 0; i < _interfaces; i++) {
             if (_routingTable[i] != null) {
-                if (((Node) _routingTable[i].node()).getAddr().networkId() == networkAddress) {
+                if (_routingTable[i].getNetworkId() == networkAddress) {
                     routerInterface = _routingTable[i].link();
                 }
             }
@@ -46,24 +63,30 @@ public class Router extends SimEnt {
     }
 
     // When messages are received at the router this method is called
-    public void recv(SimEnt source, Event ev) {
+    @Override
+    public void recv(SimEnt src, Event ev) {
         if (ev instanceof EnterNetwork event) {
-            processEnterNetwork(event);
+            System.out.println("== Router handles EnterNetwork");
+            processEnterNetwork(src, event);
         } else if (ev instanceof LeaveNetwork event) {
-            processLeaveNetwork(event);
+            System.out.println("== Router handles LeaveNetwork");
+            processLeaveNetwork(src, event);
         } else if (ev instanceof Message message) {
             System.out.println("Router handles packet with seq: " + message.seq() + " from node: " + message.source());
             if (ev instanceof RouterSolicitation event) {
                 processRouterSolicitation(event);
             } else if (ev instanceof BindingUpdate event) {
                 processBindingUpdate(event);
+//            } else if (ev instanceof IPv6Tunneled event) {
+//                var originalMessage = event.getOriginalPacket();
+//                forwardMessage(originalMessage);
             } else {
                 forwardMessage(message);
             }
         }
     }
 
-    protected void processEnterNetwork(EnterNetwork ev) {
+    protected void processEnterNetwork(SimEnt src, EnterNetwork ev) {
         var interfaceId = ev.getInterfaceId();
         if (_routingTable[interfaceId] != null) {
             // Cannot bind to an interface that's already in use.
@@ -71,18 +94,13 @@ public class Router extends SimEnt {
             return;
         }
 
-        connectInterface(interfaceId, ev.getLink(), ev.getSource());
+        connectInterface(interfaceId, ev.getNetworkId(), (Link) src);
+        send(src, new Connected(ev.getNetworkId()), 0);
     }
 
-    protected void processLeaveNetwork(LeaveNetwork ev) {
-        for (int i = 0; i < _routingTable.length; i++) {
-            if (_routingTable[i] == null) continue;
-
-            var node = (Node) _routingTable[i].node();
-            if (node.getAddr().networkId() == ev.getSourceAddress().networkId()) {
-                _routingTable[i] = null;
-            }
-        }
+    protected void processLeaveNetwork(SimEnt src, LeaveNetwork ev) {
+        disconnectInterface(ev.getSourceAddress().networkId());
+        send(src, new Disconnected(), 0);
     }
 
     protected void processRouterSolicitation(RouterSolicitation ev) {
@@ -96,8 +114,12 @@ public class Router extends SimEnt {
 
     protected void forwardMessage(Message ev) {
         SimEnt sendNext = getInterface(ev.destination().networkId());
-        System.out.println("Router sends to node: " + ev.destination().networkId() + "." + ev.destination().nodeId());
-        send(sendNext, ev, _now);
+        if (sendNext == null) {
+            System.out.printf("==== Router wants to send to %d but interface is unbound%n", ev.destination().networkId());
+        } else {
+            System.out.println("Router sends to node: " + ev.destination().networkId() + "." + ev.destination().nodeId());
+            send(sendNext, ev, _now);
+        }
     }
 
     /**
@@ -110,14 +132,10 @@ public class Router extends SimEnt {
         return false;
     }
 
-    void sendMessage(Message msg, int delayExecution) {
-        var link = getInterface(msg.destination().networkId());
-        send(link, msg, delayExecution);
-    }
-
     void multicastMessage(Message msg, int delayExecution) {
         for (var entry : _routingTable) {
             if (entry != null) {
+                System.out.println("<< " + entry.link());
                 send(entry.link(), msg, delayExecution);
             }
         }

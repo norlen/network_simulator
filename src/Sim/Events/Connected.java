@@ -5,10 +5,13 @@ import Sim.SimEnt;
 
 public class Connected implements Event {
     private final int _networkId;
-    private final SimEnt _peer;
 
     public Connected(int networkId) {
         _networkId = networkId;
+    }
+
+    public int getNetworkId() {
+        return _networkId;
     }
 
     @Override

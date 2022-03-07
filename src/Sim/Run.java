@@ -2,6 +2,7 @@ package Sim;
 
 // An example of how to build a topology and starting the simulation engine
 
+import Sim.Mobility.HomeAgent;
 import Sim.Traffic.*;
 
 import java.util.Date;
@@ -35,7 +36,7 @@ public class Run {
         }
 
         TrafficGenerator host1_traffic = null;
-        TrafficGenerator host2_traffic = null;
+        TrafficGenerator host2_traffic = new ConstantBitRate(packetsToSend, 100);
         Sink host1_sink = null;
         Sink host2_sink = null;
 
@@ -53,8 +54,8 @@ public class Run {
 
         NetworkAddr host1Addr = new NetworkAddr(1, 1);
         NetworkAddr host2Addr = new NetworkAddr(2, 1);
-        Node host1 = new Node(host1Addr.networkId(), host1Addr.nodeId(), host1_traffic, null);
-        Node host2 = new Node(host2Addr.networkId(), host2Addr.nodeId(), null, host2_sink);
+        Node host1 = new Node(host1Addr.networkId(), host1Addr.nodeId(), host1_traffic, host1_sink);
+        Node host2 = new Node(host2Addr.networkId(), host2Addr.nodeId(), host2_traffic, host2_sink);
 
         // Connect links to hosts
         host1.setPeer(link1);
@@ -64,13 +65,13 @@ public class Run {
         // is also provided.
         //
         // Note. A switch is created in same way using the Switch class
-        Router routeNode = new Router(5);
-        routeNode.connectInterface(0, link1, host1);
-        routeNode.connectInterface(1, link2, host2);
+        Router routeNode = new HomeAgent(5);
+        routeNode.connectInterface(0, 1, link1);
+        routeNode.connectInterface(1, 2, link2);
 
         // temp
-        host1.setRouter(routeNode);
-        host2.setRouter(routeNode);
+        //host1.setRouter(routeNode);
+        //host2.setRouter(routeNode);
 
         // Generate some traffic
         host1.StartSending(host2Addr, 0);

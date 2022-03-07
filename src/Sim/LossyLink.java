@@ -58,6 +58,7 @@ public class LossyLink extends Link {
      * @param src SimEnt that sent the event.
      * @param ev  incoming event.
      */
+    @Override
     public void recv(SimEnt src, Event ev) {
         if (ev instanceof Message) {
             if (shouldDropPacket()) {
@@ -68,12 +69,9 @@ public class LossyLink extends Link {
 
             double delay = getDelay();
             System.out.println("-- Link recv msg, delay: " + delay);
-            if (src == _connectorA) {
-                send(_connectorB, ev, delay);
-            } else {
-                send(_connectorA, ev, delay);
-            }
+            _now = (int) delay;
         }
+        super.recv(src, ev);
     }
 
     /**

@@ -1,5 +1,7 @@
 package Sim.Mobility;
 
+import Sim.Message;
+import Sim.Messages.IPv6Tunneled;
 import Sim.Messages.MobileIPv6.BindingUpdate;
 import Sim.NetworkAddr;
 import Sim.Router;
@@ -7,9 +9,10 @@ import Sim.Router;
 import java.util.HashMap;
 
 public class HomeAgent extends Router {
-    LRUCache<NetworkAddr, NetworkAddr> _bindingCache = new LRUCache<>(100);
+    //    LRUCache<NetworkAddr, NetworkAddr> _bindingCache = new LRUCache<>(100);
+    private HashMap<Integer, NetworkAddr> _bindingCache = new HashMap<>();
 
-    HomeAgent(int interfaces) {
+    public HomeAgent(int interfaces) {
         super(interfaces);
     }
 
@@ -22,7 +25,19 @@ public class HomeAgent extends Router {
     protected void processBindingUpdate(BindingUpdate ev) {
         var homeAddress = ev.destination();
         var careOfAddress = ev.source();
-        _bindingCache.put(homeAddress, careOfAddress);
+
+        System.out.printf(">> Home Agent update binding from %s to %s%n", homeAddress, careOfAddress);
+        _bindingCache.put(homeAddress.networkId(), careOfAddress);
+    }
+
+    @Override
+    protected void forwardMessage(Message ev) {
+        if (_bindingCache.containsKey(ev.destination().networkId())) {
+            var coa = _bindingCache.get(ev.destination().networkId());
+            System.out.printf(">> Home Agent tunnels message from %s to %s%n", ev.source(), coa);
+            ev = new IPv6Tunneled(ev.destination(), coa, 0, ev);
+        }
+        super.forwardMessage(ev);
     }
 
     /**
@@ -31,14 +46,14 @@ public class HomeAgent extends Router {
      * @param <K> key type.
      * @param <V> value type.
      */
-    protected class LRUCache<K, V> {
+    protected static class LRUCache<K, V> {
         /**
          * Internal node with pointers to previous and next nodes.
          *
          * @param <K> key type.
          * @param <V> value type.
          */
-        protected class Node<K, V> {
+        protected static class Node<K, V> {
             // Reference to next node in list.
             Node<K, V> _next;
 
@@ -80,14 +95,14 @@ public class HomeAgent extends Router {
         private final int _capacity;
 
         /**
-         * Instantiate
+         * Instantiate a new LRU cache.
          *
-         * @param capacity
+         * @param capacity how many entries to store.
          */
         protected LRUCache(int capacity) {
             _capacity = capacity;
-            _head = new Node(null, null, null, null);
-            _tail = new Node(null, null, null, null);
+            _head = new Node<>(null, null, null, null);
+            _tail = new Node<>(null, null, null, null);
 
             _head._next = _tail;
             _tail._prev = _head;
@@ -106,12 +121,12 @@ public class HomeAgent extends Router {
                 placeBefore(n, _tail);
             } else {
                 if (_cache.size() == _capacity) {
-                    Node d = _head._next;
+                    Node<K, V> d = _head._next;
                     clearFromList(d);
                     _cache.remove(d._key);
                 }
 
-                Node n = new Node(null, null, key, value);
+                Node<K, V> n = new Node<>(null, null, key, value);
                 placeBefore(n, _tail);
 
                 _cache.put(key, n);
@@ -133,12 +148,12 @@ public class HomeAgent extends Router {
             return n._value;
         }
 
-        private void clearFromList(Node n) {
+        private void clearFromList(Node<K, V> n) {
             n._prev._next = n._next;
             n._next._prev = n._prev;
         }
 
-        private void placeBefore(Node n, Node where) {
+        private void placeBefore(Node<K, V> n, Node<K, V> where) {
             n._next = where;
             n._prev = where._prev;
 

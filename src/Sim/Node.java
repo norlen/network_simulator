@@ -5,6 +5,7 @@ import Sim.Events.EnterNetwork;
 import Sim.Events.LeaveNetwork;
 import Sim.Messages.ICMPv6.RouterAdvertisement;
 import Sim.Messages.ICMPv6.RouterSolicitation;
+import Sim.Messages.IPv6Tunneled;
 import Sim.Messages.MobileIPv6.BindingAck;
 import Sim.Messages.MobileIPv6.BindingUpdate;
 import Sim.Traffic.Sink;
@@ -23,18 +24,15 @@ public class Node extends SimEnt {
     // The node's care of address.
     protected NetworkAddr _careOfAddress;
 
-    protected Router _router;
+    //protected Router _router;
 
-    void setRouter(Router router) {
-        _router = router;
-    }
+    //void setRouter(Router router) {
+    //    _router = router;
+    //}
 
     // ------------------------------------------------------------------------
     // LINK
     // ------------------------------------------------------------------------
-
-    // If the node's link is connected has connected to a valid interface.
-    private boolean _interfaceEnabled = false;
 
     // Link
     protected SimEnt _peer;
@@ -100,6 +98,9 @@ public class Node extends SimEnt {
                 processRouterAdvertisement(event);
             } else if (ev instanceof BindingAck event) {
                 processBindingUpdateAck(event);
+            } else if (ev instanceof IPv6Tunneled event) {
+                System.out.printf("-- Node %s receives tunneled message with seq: %d at time: %f%n", _id, event.seq(), SimEngine.getTime());
+                recv(src, event.getOriginalPacket());
             } else {
                 // Generic message, no specific handling.
                 System.out.println("Node " + _id + " receives message with seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
@@ -108,39 +109,22 @@ public class Node extends SimEnt {
                 }
             }
         }
-//        if (ev instanceof BindingUpdate msg) {
-//            System.out.println("-- Node " + _id + " receives Binding Update with new addr " + msg.getNewAddr() + ", seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
-//            _dst = msg.getNewAddr();
-//        }
-//        if (ev instanceof UpdateInterfaceAck event) {
-//            if (event.getChangedInterface()) {
-//                System.out.println("Node " + _id + " successfully changed to interface " + event.getInterfaceId() + " with network " + event.getNetworkId());
-//                var newNetworkAddr = new NetworkAddr(event.getNetworkId(), _id.nodeId());
-//
-//                var msg = new BindingUpdate(_id, _dst, _seq++);
-//                _id = newNetworkAddr;
-//
-//                send(_peer, msg, 0);
-//            } else {
-//                System.out.println("Node " + _id + " failed to change interface");
-//            }
-//        }
     }
 
     protected void processTimerEvent(TimerEvent event) {
         if (_trafficGenerator != null && _trafficGenerator.shouldSend()) {
             System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " sent message with seq: " + _seq + " at time " + SimEngine.getTime());
 
-            if (_trafficGenerator.getMessagesSent() == 5) {
-                var joinMsg = new EnterNetwork(this, _peer, 3, 3);
-                send(_router, joinMsg, 0);
-                sendMessage(joinMsg, 0);
-//                sendMessage(new UpdateInterface(this, _id, 3, 3), 0);
+            if (_trafficGenerator.getMessagesSent() == 5 && _id.networkId() == 1) {
+                // Leave the current network and join the new network.
+                System.out.printf("-- Node %s leaving current network and tries to join new network%n", _id);
+                sendMessage(new LeaveNetwork(this._id));
+                sendMessage(new EnterNetwork(this, 3, 3));
             }
 
             // Send message.
             var msg = new Message(_id, _dst, _seq++);
-            sendMessage(msg, 0);
+            sendMessage(msg);
             _trafficGenerator.addPacketSent();
 
             // Schedule next message.
@@ -150,22 +134,23 @@ public class Node extends SimEnt {
     }
 
     protected void processLeaveNetwork(LeaveNetwork ev) {
-        // We left the previous network, so make sure we don't send any traffic on the link.
-        _interfaceEnabled = false;
+        System.out.printf("-- Node %s disconnected from network at time: %f%n", _id, SimEngine.getTime());
     }
 
-    protected void processConnected(EnterNetwork ev) {
-        // We entered a network, so enable the interface again.
-        _interfaceEnabled = true;
+    protected void processConnected(Connected ev) {
+        System.out.printf("-- Node %s connected to network at time: %f%n", _id, SimEngine.getTime());
 
         // Send a Router Solicitation straight away, we skip the random delay since we are a mobile node.
         // RFC 4861 (https://datatracker.ietf.org/doc/html/rfc4861) mentions that the delay may be omitted for this.
         var msg = new RouterSolicitation(_seq++);
-        sendMessage(msg, 0);
+        sendMessage(msg);
     }
 
     protected void processRouterAdvertisement(RouterAdvertisement ev) {
-        var newNetwork = ev.destination().networkId();
+        System.out.printf("-- Node %s receives RouterAdvertisement with seq: %d at time %f%n", _id, ev.seq(), SimEngine.getTime());
+
+        var newNetwork = 3;
+        if (_id.networkId() == 2) return;
 
         // If we received another advertisement for a network we're already on, then do nothing.
         if ((_careOfAddress != null && _careOfAddress.networkId() == newNetwork) || (_careOfAddress == null && _id.networkId() == newNetwork)) {
@@ -183,11 +168,12 @@ public class Node extends SimEnt {
             _careOfAddress = new NetworkAddr(newNetwork, _id.nodeId());
             msg = new BindingUpdate(_careOfAddress, _id, _seq++);
         }
-        sendMessage(msg, 0);
+        sendMessage(msg);
     }
 
     protected void processBindingUpdateAck(BindingAck ev) {
-
+        // Not sure what to do here.
+        System.out.printf("-- Node %s receives BindingAck with seq: %d at time %f%n", _id, ev.seq(), SimEngine.getTime());
     }
 
     public TrafficGenerator getTrafficGenerator() {
@@ -198,9 +184,7 @@ public class Node extends SimEnt {
         return _sink;
     }
 
-    protected void sendMessage(Event ev, int delayExecution) {
-        if (_interfaceEnabled) {
-            send(_peer, ev, delayExecution);
-        }
+    protected void sendMessage(Event ev) {
+        send(_peer, ev, 0);
     }
 }
