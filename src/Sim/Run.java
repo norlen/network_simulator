@@ -68,6 +68,10 @@ public class Run {
         routeNode.connectInterface(0, link1, host1);
         routeNode.connectInterface(1, link2, host2);
 
+        // temp
+        host1.setRouter(routeNode);
+        host2.setRouter(routeNode);
+
         // Generate some traffic
         host1.StartSending(host2Addr, 0);
         host2.StartSending(host1Addr, 0);

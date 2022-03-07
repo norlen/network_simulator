@@ -5,11 +5,13 @@ import Sim.NetworkAddr;
 import Sim.SimEnt;
 
 public class UpdateInterface implements Event {
+    private final SimEnt _src;
     private final NetworkAddr _addr;
     private final int _newInterfaceId;
     private final int _networkId;
 
-    public UpdateInterface(NetworkAddr addr, int newInterfaceId, int networkId) {
+    public UpdateInterface(SimEnt src, NetworkAddr addr, int newInterfaceId, int networkId) {
+        _src = src;
         _addr = addr;
         _newInterfaceId = newInterfaceId;
         _networkId = networkId;
@@ -30,5 +32,9 @@ public class UpdateInterface implements Event {
     @Override
     public void entering(SimEnt locale) {
 
+    }
+
+    public SimEnt getSrc() {
+        return _src;
     }
 }

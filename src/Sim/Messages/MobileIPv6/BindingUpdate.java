@@ -10,9 +10,6 @@ import Sim.NetworkAddr;
 public class BindingUpdate extends MobilityHeader {
     public static final int MHType = 5;
 
-    // The fields are not exhaustive, check reference for all possible fields. The fields here are the ones that are
-    // required for our implementation.
-
     // Set to request a Binding Acknowledgement.
     private final boolean _acknowledge = false;
 
@@ -25,14 +22,7 @@ public class BindingUpdate extends MobilityHeader {
     // Unsigned 16-bit. Lifetime of the binding until it must be considered expired. One time unit is 4 seconds.
     private final int _lifetime = 0;
 
-    //private final NetworkAddr _newAddr;
-
-    public BindingUpdate(NetworkAddr from, NetworkAddr to, int seq, NetworkAddr newAddr) {
+    public BindingUpdate(NetworkAddr from, NetworkAddr to, int seq) {
         super(from, to, seq, MHType);
-        //_newAddr = newAddr;
     }
-
-//    public NetworkAddr getNewAddr() {
-//        return _newAddr;
-//    }
 }

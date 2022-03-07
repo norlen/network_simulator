@@ -1,6 +1,6 @@
 package Sim.Messages.ICMPv6;
 
-import Sim.Message;
+import Sim.Messages.IPv6;
 import Sim.NetworkAddr;
 
 /**
@@ -11,7 +11,7 @@ import Sim.NetworkAddr;
  * <p>
  * Reference: https://datatracker.ietf.org/doc/html/rfc4443
  */
-public abstract class ICMPv6 extends Message {
+public abstract class ICMPv6 extends IPv6 {
     // This class makes the simplification of using fields for the required values, instead of packing the values into
     // 32-bits. In part to make it easier to use, as well as to not having to mess with conversion between host byte
     // order, and network byte order.
@@ -27,7 +27,6 @@ public abstract class ICMPv6 extends Message {
      *
      * @param from source address.
      * @param to   destination address.
-     * @param seq  sequence number.
      * @param type ICMPv6 message type.
      * @param code ICMPv6 message code.
      */

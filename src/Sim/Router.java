@@ -2,16 +2,19 @@ package Sim;
 
 // This class implements a simple router
 
-import Sim.Events.UpdateInterface;
-import Sim.Events.UpdateInterfaceAck;
+import Sim.Events.EnterNetwork;
+import Sim.Events.LeaveNetwork;
+import Sim.Messages.ICMPv6.RouterAdvertisement;
+import Sim.Messages.ICMPv6.RouterSolicitation;
+import Sim.Messages.MobileIPv6.BindingUpdate;
 
 public class Router extends SimEnt {
-    private RouteTableEntry[] _routingTable;
-    private int _interfaces;
-    private int _now = 0;
+    private final RouteTableEntry[] _routingTable;
+    private final int _interfaces;
+    private final int _now = 0;
 
     // When created, number of interfaces are defined
-    Router(int interfaces) {
+    public Router(int interfaces) {
         _routingTable = new RouteTableEntry[interfaces];
         _interfaces = interfaces;
     }
@@ -43,43 +46,80 @@ public class Router extends SimEnt {
     }
 
     // When messages are received at the router this method is called
-    public void recv(SimEnt source, Event event) {
-        if (event instanceof Message ev) {
-            System.out.println("Router handles packet with seq: " + ev.seq() + " from node: " + ev.source().networkId() + "." + ev.source().nodeId());
-            SimEnt sendNext = getInterface(((Message) event).destination().networkId());
-            System.out.println("Router sends to node: " + ev.destination().networkId() + "." + ev.destination().nodeId());
-            send(sendNext, event, _now);
-        }
-
-        if (event instanceof UpdateInterface ev) {
-            System.out.println("== Router received a ChangeInterface packet from " + ev.getAddr() + " change interface to " + ev.getNewInterfaceId());
-            
-            var success = updateInterface(ev.getAddr(), ev.getNewInterfaceId());
-            var sendNext = getInterface(ev.getAddr().networkId());
-            var msg = new UpdateInterfaceAck(success, ev.getNewInterfaceId(), ev.getNetworkId());
-
-            send(sendNext, msg, _now);
+    public void recv(SimEnt source, Event ev) {
+        if (ev instanceof EnterNetwork event) {
+            processEnterNetwork(event);
+        } else if (ev instanceof LeaveNetwork event) {
+            processLeaveNetwork(event);
+        } else if (ev instanceof Message message) {
+            System.out.println("Router handles packet with seq: " + message.seq() + " from node: " + message.source());
+            if (ev instanceof RouterSolicitation event) {
+                processRouterSolicitation(event);
+            } else if (ev instanceof BindingUpdate event) {
+                processBindingUpdate(event);
+            } else {
+                forwardMessage(message);
+            }
         }
     }
 
-    private boolean updateInterface(NetworkAddr address, int newInterfaceId) {
-        if (_routingTable[newInterfaceId] != null) {
-            // Interface ID already in use.
-            return false;
+    protected void processEnterNetwork(EnterNetwork ev) {
+        var interfaceId = ev.getInterfaceId();
+        if (_routingTable[interfaceId] != null) {
+            // Cannot bind to an interface that's already in use.
+            System.err.printf("Cannot bind to interface %d: already in use%n", interfaceId);
+            return;
         }
 
+        connectInterface(interfaceId, ev.getLink(), ev.getSource());
+    }
+
+    protected void processLeaveNetwork(LeaveNetwork ev) {
         for (int i = 0; i < _routingTable.length; i++) {
             if (_routingTable[i] == null) continue;
 
             var node = (Node) _routingTable[i].node();
-            if (node.getAddr().networkId() == address.networkId()) {
-                _routingTable[newInterfaceId] = _routingTable[i];
+            if (node.getAddr().networkId() == ev.getSourceAddress().networkId()) {
                 _routingTable[i] = null;
-                return true;
             }
         }
+    }
 
-        // Old interface not found.
+    protected void processRouterSolicitation(RouterSolicitation ev) {
+        var msg = new RouterAdvertisement(null, null, 0);
+        multicastMessage(msg, 0);
+    }
+
+    protected void processBindingUpdate(BindingUpdate ev) {
+        forwardMessage(ev);
+    }
+
+    protected void forwardMessage(Message ev) {
+        SimEnt sendNext = getInterface(ev.destination().networkId());
+        System.out.println("Router sends to node: " + ev.destination().networkId() + "." + ev.destination().nodeId());
+        send(sendNext, ev, _now);
+    }
+
+    /**
+     * Checks if this router is a home agent. Used when sending Router Advertisements which has if it's a home agent
+     * or not.
+     *
+     * @return true if the router is a home agent.
+     */
+    protected boolean isHomeAgent() {
         return false;
+    }
+
+    void sendMessage(Message msg, int delayExecution) {
+        var link = getInterface(msg.destination().networkId());
+        send(link, msg, delayExecution);
+    }
+
+    void multicastMessage(Message msg, int delayExecution) {
+        for (var entry : _routingTable) {
+            if (entry != null) {
+                send(entry.link(), msg, delayExecution);
+            }
+        }
     }
 }
