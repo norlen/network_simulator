@@ -10,10 +10,10 @@ import java.util.HashMap;
 
 public class HomeAgent extends Router {
     //    LRUCache<NetworkAddr, NetworkAddr> _bindingCache = new LRUCache<>(100);
-    private HashMap<Integer, NetworkAddr> _bindingCache = new HashMap<>();
+    private HashMap<Long, NetworkAddr> _bindingCache = new HashMap<>();
 
-    public HomeAgent(int interfaces, int baseNetwork) {
-        super(interfaces, baseNetwork);
+    public HomeAgent(String name, int interfaces, long basePrefix) {
+        super(name, interfaces, basePrefix);
     }
 
     @Override
@@ -26,15 +26,37 @@ public class HomeAgent extends Router {
         var homeAddress = ev.destination();
         var careOfAddress = ev.source();
 
-        System.out.printf(">> Home Agent update binding from %s to %s%n", homeAddress, careOfAddress);
+        System.out.printf("== %s update binding from %s to %s%n", this, homeAddress, careOfAddress);
         _bindingCache.put(homeAddress.networkId(), careOfAddress);
+    }
+
+    @Override
+    protected void processTunneledMessage(IPv6Tunneled ev) {
+        // If we received a tunneled message where the source is a mobile agent we care for, then we should unwrap it
+        // and forward the original message.
+        boolean caresFor = false;
+        for (var entry : _bindingCache.entrySet()) {
+            if (entry.getValue() == ev.source()) {
+                caresFor = true;
+                break;
+            }
+        }
+
+        if (caresFor) {
+            var original = ev.getOriginalPacket();
+            System.out.printf("%s received tunneled message %d from %s which it cares for. Unpacking and forwarding to %s", this, ev.seq(), ev.source(), original.destination());
+            forwardMessage(original);
+        } else {
+            System.out.printf("%s received tunneled message %d. Do nothing and pass along to %s", this, ev.seq(), ev.destination());
+            forwardMessage(ev);
+        }
     }
 
     @Override
     protected void forwardMessage(Message ev) {
         if (_bindingCache.containsKey(ev.destination().networkId())) {
             var coa = _bindingCache.get(ev.destination().networkId());
-            System.out.printf(">> Home Agent tunnels message from %s to %s%n", ev.source(), coa);
+            System.out.printf("== %s tunnels message from (%s -> %s) to (%s -> %s)%n", this, ev.source(), ev.destination(), ev.destination(), coa);
             ev = new IPv6Tunneled(ev.destination(), coa, 0, ev);
         }
         super.forwardMessage(ev);

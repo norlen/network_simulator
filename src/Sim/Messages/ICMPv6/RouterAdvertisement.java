@@ -18,14 +18,14 @@ public class RouterAdvertisement extends ICMPv6 {
     public static final int ICMP_CODE = 0;
 
     // Network prefix the router is on.
-    private final int _networkPrefix;
+    private final long _networkPrefix;
 
-    public RouterAdvertisement(NetworkAddr from, NetworkAddr to, int seq, int networkPrefix) {
+    public RouterAdvertisement(NetworkAddr from, NetworkAddr to, int seq, long networkPrefix) {
         super(from, to, ICMP_TYPE, ICMP_CODE, seq);
         _networkPrefix = networkPrefix;
     }
 
-    public int getNetworkPrefix() {
+    public long getNetworkPrefix() {
         return _networkPrefix;
     }
 }

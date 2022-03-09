@@ -31,7 +31,7 @@ public class Link extends SimEnt {
 
         System.out.printf("** Link setConnector(), connectorA: %s, connectorB: %s%n", _connectorA, _connectorB);
         if (_connectorA != null) {
-            if (_connectorA == null) {
+            if (_connectorB == null) {
                 // Disconnected.
                 //_enabled = false;
                 send(_connectorA, new Disconnected(), 0);

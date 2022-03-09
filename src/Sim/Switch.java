@@ -40,11 +40,11 @@ public class Switch extends SimEnt {
 
     // Called when a frame is received by the switch
     public void recv(SimEnt source, Event event) {
-        if (event instanceof Message) {
-            System.out.println("Switch handles frame with seq: " + ((Message) event).seq() + " from node: " + ((Message) event).source().nodeId());
-            SimEnt sendNext = getPort(((Message) event).destination().nodeId());
-            System.out.println("Switch forwards to host: " + ((Message) event).destination().nodeId());
-            send(sendNext, event, 0);
-        }
+//        if (event instanceof Message) {
+//            System.out.println("Switch handles frame with seq: " + ((Message) event).seq() + " from node: " + ((Message) event).source().nodeId());
+//            SimEnt sendNext = getPort(((Message) event).destination().nodeId());
+//            System.out.println("Switch forwards to host: " + ((Message) event).destination().nodeId());
+//            send(sendNext, event, 0);
+//        }
     }
 }

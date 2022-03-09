@@ -1,28 +1,36 @@
 package Sim;
 
-// This class represent the network address, it consist of a network identity
+// This class represent the network address, it consists of a network identity
 // "_networkId" represented as an integer (if you want to link this to IP number it can be
 // compared to the network part of the IP address like 132.17.9.0). Then _nodeId represent
 // the host part.
-public class NetworkAddr {
-    private int _networkId;
-    private int _nodeId;
 
-    public NetworkAddr(int network, int node) {
+/**
+ * IPv6 address.
+ */
+public class NetworkAddr {
+    private long _networkId;
+    private long _nodeId;
+
+    public NetworkAddr(long network, long node) {
         _networkId = network;
         _nodeId = node;
     }
 
-    public int networkId() {
+    public long networkId() {
         return _networkId;
     }
 
-    public int nodeId() {
+    public long nodeId() {
         return _nodeId;
     }
 
     @Override
     public String toString() {
-        return _networkId + "." + _nodeId;
+        return String.format("%s:%s", getHex(_networkId), getHex(_nodeId));
+    }
+
+    private String getHex(long part) {
+        return String.format("%h:%h:%h:%h", (part >> 48) & 0xFFFF, (part >> 32) & 0xFFFF, (part >> 16) & 0xFFFF, part & 0xFFFF);
     }
 }

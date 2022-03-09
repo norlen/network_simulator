@@ -29,7 +29,7 @@ public class Node extends SimEnt {
     protected NetworkAddr _careOfAddress;
 
     // Flag to check if we have performed the stateless autoconfiguration.
-    protected boolean _ipConfigurationCompleted = false;
+    protected boolean _ipConfigurationCompleted = true;
 
     // Link
     protected SimEnt _peer;
@@ -44,9 +44,13 @@ public class Node extends SimEnt {
     // Current sequence number for each packet.
     private int _seq = 0;
 
-    public Node(int node, TrafficGenerator generator, Sink sink) {
+    private final String _name;
+
+    public Node(String name, NetworkAddr addr, TrafficGenerator generator, Sink sink) {
         super();
-        _linkLocal = new NetworkAddr(-1, node);
+        _name = name;
+        _linkLocal = new NetworkAddr(0xfe80000000000000L, addr.nodeId());
+        _homeAddress = addr;
         _trafficGenerator = generator;
         _sink = sink;
     }
@@ -107,7 +111,7 @@ public class Node extends SimEnt {
                 recv(src, event.getOriginalPacket());
             } else {
                 // Generic message, no specific handling.
-                System.out.println("" + this + " " + _linkLocal + " receives message with seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
+                System.out.printf("%s receives message with seq: %d at time: %f%n", this, msg.seq(), SimEngine.getTime());
                 if (_sink != null) {
                     _sink.process(src, ev);
                 }
@@ -117,11 +121,11 @@ public class Node extends SimEnt {
 
     protected void processTimerEvent(TimerEvent event) {
         if (_trafficGenerator != null && _trafficGenerator.shouldSend()) {
-            System.out.println("" + this + " " + _linkLocal.networkId() + "." + _linkLocal.nodeId() + " sent message with seq: " + _seq + " at time " + SimEngine.getTime());
+            System.out.printf("%s sent message to %s with seq: %d at time: %f%n", this, _dst, _seq, SimEngine.getTime());
 
-            if (_trafficGenerator.getMessagesSent() == 5 && _homeAddress.networkId() == 0) {
+            if (_trafficGenerator.getMessagesSent() == 5 && _name == "MN") {
                 // Leave the current network and join the new network.
-                System.out.printf("----------- %s leaving current network and tries to join new network%n", this);
+                System.out.printf("-- %s leaving current network and tries to join new network%n", this);
                 sendMessage(new LeaveNetwork(getCurrentAddress()));
                 sendMessage(new EnterNetwork(this, 3));
                 _ipConfigurationCompleted = false;
@@ -131,6 +135,7 @@ public class Node extends SimEnt {
             // Send message.
             var msg = new Message(_homeAddress, _dst, _seq++);
             if (_careOfAddress != null) {
+                System.out.printf("%s has CoA, tunneling message with seq: %d to %s%n", this, msg.seq(), _homeAddress);
                 // If we have a care of address, tunnel the message to the home agent.
                 msg = new IPv6Tunneled(_careOfAddress, _homeAddress, 0, msg);
             }
@@ -144,7 +149,7 @@ public class Node extends SimEnt {
     }
 
     protected void processConnected(Connected ev) {
-        System.out.printf("----------------------------- %s connected to network at time: %f%n", this, SimEngine.getTime());
+        System.out.printf("-- %s connected to network at time: %f%n", this, SimEngine.getTime());
 
         // Send a Router Solicitation straight away, we skip the random delay since we are a mobile node.
         // RFC 4861 (https://datatracker.ietf.org/doc/html/rfc4861) mentions that the delay may be omitted for this.
@@ -183,7 +188,7 @@ public class Node extends SimEnt {
             }
             sendMessage(msg);
         }
-        System.out.printf("---- %s completed stateless autoconfiguration. Home address: %s, Care of Address: %s%n", this, _homeAddress, _careOfAddress);
+        System.out.printf("-- %s completed IPv6 stateless auto configuration%n", this, _homeAddress, _careOfAddress);
 
         // IP configuration done. Here we should do neighbor discovery to see if this address exists on the network.
         // which is left for future work.
@@ -209,17 +214,6 @@ public class Node extends SimEnt {
 
     @Override
     public String toString() {
-        String s = "Node-" + _linkLocal.nodeId();
-        if (_homeAddress == null) {
-            s += " (link-local only)";
-        } else {
-            s += " " + _homeAddress;
-            if (_careOfAddress == null) {
-                s += " (home address-only)";
-            } else {
-                s += " coa=" + _careOfAddress;
-            }
-        }
-        return s;
+        return String.format("Node %s ll=[%s] ha=[%s] coa=[%s]", _name, _linkLocal, _homeAddress, _careOfAddress);
     }
 }
