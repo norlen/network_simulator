@@ -14,7 +14,7 @@ public class Link extends SimEnt {
     protected double _now = 0;
 
     // If the node's link is connected has connected to a valid interface.
-    protected boolean _enabled = false;
+    protected boolean _enabled = true;
 
     public Link() {
         super();
@@ -29,22 +29,22 @@ public class Link extends SimEnt {
             _connectorB = connectTo;
         }
 
-        if (_connectorA != null && _connectorB != null) {
-            _enabled = true;
+        System.out.printf("** Link setConnector(), connectorA: %s, connectorB: %s%n", _connectorA, _connectorB);
+        if (_connectorA != null) {
+            if (_connectorA == null) {
+                // Disconnected.
+                //_enabled = false;
+                send(_connectorA, new Disconnected(), 0);
+            } else {
+                // _enabled = true;
+                send(_connectorA, new Connected(), 0);
+            }
         }
     }
 
     // Called when a message enters the link
     public void recv(SimEnt src, Event ev) {
-        if (ev instanceof Connected) {
-            //_enabled = true;
-            //_connectorB = src;
-            forward(src, ev);
-        } else if (ev instanceof Disconnected) {
-            //_enabled = false;
-            //_connectorB = null;
-            forward(src, ev);
-        } else if (ev instanceof Message || ev instanceof EnterNetwork || ev instanceof LeaveNetwork) {
+        if (ev instanceof Message || ev instanceof EnterNetwork || ev instanceof LeaveNetwork) {
             forward(src, ev);
         }
     }

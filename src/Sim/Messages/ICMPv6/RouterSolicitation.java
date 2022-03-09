@@ -1,5 +1,7 @@
 package Sim.Messages.ICMPv6;
 
+import Sim.NetworkAddr;
+
 /**
  * Router Solicitation is a message sent to routers to make it generate Router Advertisements.
  * <p>
@@ -14,7 +16,7 @@ public class RouterSolicitation extends ICMPv6 {
     // ICMP code for Router Solicitation.
     public static final int ICMP_CODE = 0;
 
-    public RouterSolicitation(int seq) {
-        super(null, null, seq, ICMP_TYPE, ICMP_CODE);
+    public RouterSolicitation(NetworkAddr from, int seq) {
+        super(from, null, seq, ICMP_TYPE, ICMP_CODE);
     }
 }

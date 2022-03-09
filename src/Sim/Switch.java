@@ -30,14 +30,14 @@ public class Switch extends SimEnt {
         SimEnt port = null;
         for (int i = 0; i < _ports; i++) {
             if (_switchTable[i] != null) {
-                if (((Node) _switchTable[i].node()).getAddr().nodeId() == nodeAddress) {
+                if (((Node) _switchTable[i].node()).getHomeAddress().nodeId() == nodeAddress) {
                     port = _switchTable[i].link();
                 }
             }
         }
         return port;
     }
-	
+
     // Called when a frame is received by the switch
     public void recv(SimEnt source, Event event) {
         if (event instanceof Message) {

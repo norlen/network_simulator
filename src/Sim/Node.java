@@ -1,6 +1,7 @@
 package Sim;
 
 import Sim.Events.Connected;
+import Sim.Events.Disconnected;
 import Sim.Events.EnterNetwork;
 import Sim.Events.LeaveNetwork;
 import Sim.Messages.ICMPv6.RouterAdvertisement;
@@ -13,33 +14,25 @@ import Sim.Traffic.TrafficGenerator;
 
 // This class implements a node (host) it has an address, a peer that it communicates with
 // and it count messages send and received.
-public class Node extends SimEnt {
-    // ------------------------------------------------------------------------
-    // ADDRESS
-    // ------------------------------------------------------------------------
 
-    // The node's own address.
-    protected NetworkAddr _id;
+/**
+ *
+ */
+public class Node extends SimEnt {
+    // Link-local address.
+    protected NetworkAddr _linkLocal;
+
+    // The node's global unicast address which it got by the home agent.
+    protected NetworkAddr _homeAddress;
 
     // The node's care of address.
     protected NetworkAddr _careOfAddress;
 
-    //protected Router _router;
-
-    //void setRouter(Router router) {
-    //    _router = router;
-    //}
-
-    // ------------------------------------------------------------------------
-    // LINK
-    // ------------------------------------------------------------------------
+    // Flag to check if we have performed the stateless autoconfiguration.
+    protected boolean _ipConfigurationCompleted = false;
 
     // Link
     protected SimEnt _peer;
-
-    // ------------------------------------------------------------------------
-    // TRAFFIC
-    // ------------------------------------------------------------------------
 
     //
     private final TrafficGenerator _trafficGenerator;
@@ -51,9 +44,9 @@ public class Node extends SimEnt {
     // Current sequence number for each packet.
     private int _seq = 0;
 
-    public Node(int network, int node, TrafficGenerator generator, Sink sink) {
+    public Node(int node, TrafficGenerator generator, Sink sink) {
         super();
-        _id = new NetworkAddr(network, node);
+        _linkLocal = new NetworkAddr(-1, node);
         _trafficGenerator = generator;
         _sink = sink;
     }
@@ -67,10 +60,21 @@ public class Node extends SimEnt {
         }
     }
 
-    public NetworkAddr getAddr() {
-        return _id;
+    public NetworkAddr getLinkLocalAddr() {
+        return _linkLocal;
     }
 
+    public NetworkAddr getHomeAddress() {
+        return _homeAddress;
+    }
+
+    public NetworkAddr getCurrentAddress() {
+        if (_careOfAddress != null) {
+            return _careOfAddress;
+        } else {
+            return _homeAddress;
+        }
+    }
 
     /**
      * Start sending packets to the destination, stops when all packets have been sent.
@@ -89,8 +93,8 @@ public class Node extends SimEnt {
     public void recv(SimEnt src, Event ev) {
         if (ev instanceof Connected event) {
             processConnected(event);
-        } else if (ev instanceof LeaveNetwork event) {
-            processLeaveNetwork(event);
+        } else if (ev instanceof Disconnected event) {
+            processDisconnected(event);
         } else if (ev instanceof TimerEvent event) {
             processTimerEvent(event);
         } else if (ev instanceof Message msg) {
@@ -99,11 +103,11 @@ public class Node extends SimEnt {
             } else if (ev instanceof BindingAck event) {
                 processBindingUpdateAck(event);
             } else if (ev instanceof IPv6Tunneled event) {
-                System.out.printf("-- Node %s receives tunneled message with seq: %d at time: %f%n", _id, event.seq(), SimEngine.getTime());
+                System.out.printf("-- %s receives tunneled message with seq: %d at time: %f%n", this, event.seq(), SimEngine.getTime());
                 recv(src, event.getOriginalPacket());
             } else {
                 // Generic message, no specific handling.
-                System.out.println("Node " + _id + " receives message with seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
+                System.out.println("" + this + " " + _linkLocal + " receives message with seq: " + ((Message) ev).seq() + " at time " + SimEngine.getTime());
                 if (_sink != null) {
                     _sink.process(src, ev);
                 }
@@ -113,17 +117,23 @@ public class Node extends SimEnt {
 
     protected void processTimerEvent(TimerEvent event) {
         if (_trafficGenerator != null && _trafficGenerator.shouldSend()) {
-            System.out.println("Node " + _id.networkId() + "." + _id.nodeId() + " sent message with seq: " + _seq + " at time " + SimEngine.getTime());
+            System.out.println("" + this + " " + _linkLocal.networkId() + "." + _linkLocal.nodeId() + " sent message with seq: " + _seq + " at time " + SimEngine.getTime());
 
-            if (_trafficGenerator.getMessagesSent() == 5 && _id.networkId() == 1) {
+            if (_trafficGenerator.getMessagesSent() == 5 && _homeAddress.networkId() == 0) {
                 // Leave the current network and join the new network.
-                System.out.printf("-- Node %s leaving current network and tries to join new network%n", _id);
-                sendMessage(new LeaveNetwork(this._id));
-                sendMessage(new EnterNetwork(this, 3, 3));
+                System.out.printf("----------- %s leaving current network and tries to join new network%n", this);
+                sendMessage(new LeaveNetwork(getCurrentAddress()));
+                sendMessage(new EnterNetwork(this, 3));
+                _ipConfigurationCompleted = false;
+                _careOfAddress = null;
             }
 
             // Send message.
-            var msg = new Message(_id, _dst, _seq++);
+            var msg = new Message(_homeAddress, _dst, _seq++);
+            if (_careOfAddress != null) {
+                // If we have a care of address, tunnel the message to the home agent.
+                msg = new IPv6Tunneled(_careOfAddress, _homeAddress, 0, msg);
+            }
             sendMessage(msg);
             _trafficGenerator.addPacketSent();
 
@@ -133,47 +143,56 @@ public class Node extends SimEnt {
         }
     }
 
-    protected void processLeaveNetwork(LeaveNetwork ev) {
-        System.out.printf("-- Node %s disconnected from network at time: %f%n", _id, SimEngine.getTime());
-    }
-
     protected void processConnected(Connected ev) {
-        System.out.printf("-- Node %s connected to network at time: %f%n", _id, SimEngine.getTime());
+        System.out.printf("----------------------------- %s connected to network at time: %f%n", this, SimEngine.getTime());
 
         // Send a Router Solicitation straight away, we skip the random delay since we are a mobile node.
         // RFC 4861 (https://datatracker.ietf.org/doc/html/rfc4861) mentions that the delay may be omitted for this.
-        var msg = new RouterSolicitation(_seq++);
+        var msg = new RouterSolicitation(_linkLocal, _seq++);
         sendMessage(msg);
     }
 
+    protected void processDisconnected(Disconnected ev) {
+        // Remove care of address if it exists, and make sure we perform ip configuration on next connect.
+//        _ipConfigurationCompleted = false;
+//        _careOfAddress = null;
+    }
+
     protected void processRouterAdvertisement(RouterAdvertisement ev) {
-        System.out.printf("-- Node %s receives RouterAdvertisement with seq: %d at time %f%n", _id, ev.seq(), SimEngine.getTime());
+        System.out.printf("-- %s receives RouterAdvertisement with seq: %d at time %f%n", this, ev.seq(), SimEngine.getTime());
 
-        var newNetwork = 3;
-        if (_id.networkId() == 2) return;
-
-        // If we received another advertisement for a network we're already on, then do nothing.
-        if ((_careOfAddress != null && _careOfAddress.networkId() == newNetwork) || (_careOfAddress == null && _id.networkId() == newNetwork)) {
+        if (_ipConfigurationCompleted) {
+            // This isn't exactly correct, but we don't care about advertisement right now if we have already performed
+            // stateless autoconfiguration.
             return;
         }
 
-        // Send a binding update to our Home Agent to notify it of our new address.
-        BindingUpdate msg;
-        if (newNetwork == _id.networkId()) {
-            // Back on the home network.
-            _careOfAddress = null;
-            msg = new BindingUpdate(_id, _id, _seq++);
+        // Check if we entered our home network or a foreign network.
+        if (_homeAddress == null) {
+            _homeAddress = new NetworkAddr(ev.getNetworkPrefix(), _linkLocal.nodeId());
         } else {
-            // On a foreign network.
-            _careOfAddress = new NetworkAddr(newNetwork, _id.nodeId());
-            msg = new BindingUpdate(_careOfAddress, _id, _seq++);
+            var prefix = ev.getNetworkPrefix();
+            BindingUpdate msg;
+
+            // Check if we re-entered the home network.
+            if (_homeAddress.networkId() == prefix) {
+                msg = new BindingUpdate(_homeAddress, _homeAddress, _seq++);
+            } else {
+                _careOfAddress = new NetworkAddr(prefix, _linkLocal.nodeId());
+                msg = new BindingUpdate(_careOfAddress, _homeAddress, _seq++);
+            }
+            sendMessage(msg);
         }
-        sendMessage(msg);
+        System.out.printf("---- %s completed stateless autoconfiguration. Home address: %s, Care of Address: %s%n", this, _homeAddress, _careOfAddress);
+
+        // IP configuration done. Here we should do neighbor discovery to see if this address exists on the network.
+        // which is left for future work.
+        _ipConfigurationCompleted = true;
     }
 
     protected void processBindingUpdateAck(BindingAck ev) {
         // Not sure what to do here.
-        System.out.printf("-- Node %s receives BindingAck with seq: %d at time %f%n", _id, ev.seq(), SimEngine.getTime());
+        System.out.printf("-- %s receives BindingAck with seq: %d at time %f%n", this, ev.seq(), SimEngine.getTime());
     }
 
     public TrafficGenerator getTrafficGenerator() {
@@ -186,5 +205,21 @@ public class Node extends SimEnt {
 
     protected void sendMessage(Event ev) {
         send(_peer, ev, 0);
+    }
+
+    @Override
+    public String toString() {
+        String s = "Node-" + _linkLocal.nodeId();
+        if (_homeAddress == null) {
+            s += " (link-local only)";
+        } else {
+            s += " " + _homeAddress;
+            if (_careOfAddress == null) {
+                s += " (home address-only)";
+            } else {
+                s += " coa=" + _careOfAddress;
+            }
+        }
+        return s;
     }
 }

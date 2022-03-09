@@ -1,34 +1,34 @@
 package Sim;
 
-// This class implements a simple router
-
-import Sim.Events.Connected;
-import Sim.Events.Disconnected;
 import Sim.Events.EnterNetwork;
 import Sim.Events.LeaveNetwork;
 import Sim.Messages.ICMPv6.RouterAdvertisement;
 import Sim.Messages.ICMPv6.RouterSolicitation;
+import Sim.Messages.IPv6Tunneled;
 import Sim.Messages.MobileIPv6.BindingUpdate;
 
 public class Router extends SimEnt {
     private final RouteTableEntry[] _routingTable;
     private final int _interfaces;
     private final int _now = 0;
+    private final int _baseNetwork;
 
     // When created, number of interfaces are defined
-    public Router(int interfaces) {
+    public Router(int interfaces, int baseNetwork) {
         _routingTable = new RouteTableEntry[interfaces];
         _interfaces = interfaces;
+        _baseNetwork = baseNetwork;
     }
 
     // This method connects links to the router and also informs the
     // router of the host connects to the other end of the link
-    public void connectInterface(int interfaceNumber, int networkId, Link link) {
+    public void connectInterface(int interfaceNumber, Link link, int[] networks) {
         if (interfaceNumber < _interfaces) {
-            _routingTable[interfaceNumber] = new RouteTableEntry(networkId, link);
+            _routingTable[interfaceNumber] = new RouteTableEntry(networks, link);
         } else {
             System.out.println("Trying to connect to port not in router");
         }
+
         link.setConnector(this);
     }
 
@@ -40,9 +40,19 @@ public class Router extends SimEnt {
     public void disconnectInterface(int networkId) {
         for (int i = 0; i < _routingTable.length; i++) {
             if (_routingTable[i] == null) continue;
+            System.out.println(_routingTable[i]);
 
-            if (_routingTable[i].getNetworkId() == networkId) {
-                _routingTable[i] = null;
+            for (int j = 0; j < _routingTable[i].getNetworkIds().length; ++j) {
+                if (_routingTable[i].getNetworkIds()[j] == networkId) {
+                    // If this is a link, then disconnect it.
+                    if (_routingTable[i].link() instanceof Link link) {
+                        link.setConnector(null);
+                    }
+
+                    // Clear routing table entry.
+                    _routingTable[i] = null;
+                    return;
+                }
             }
         }
     }
@@ -53,8 +63,10 @@ public class Router extends SimEnt {
     private SimEnt getInterface(int networkAddress) {
         SimEnt routerInterface = null;
         for (int i = 0; i < _interfaces; i++) {
-            if (_routingTable[i] != null) {
-                if (_routingTable[i].getNetworkId() == networkAddress) {
+            if (_routingTable[i] == null) continue;
+
+            for (int j = 0; j < _routingTable[i].getNetworkIds().length; ++j) {
+                if (_routingTable[i].getNetworkIds()[j] == networkAddress) {
                     routerInterface = _routingTable[i].link();
                 }
             }
@@ -75,11 +87,13 @@ public class Router extends SimEnt {
             System.out.println("Router handles packet with seq: " + message.seq() + " from node: " + message.source());
             if (ev instanceof RouterSolicitation event) {
                 processRouterSolicitation(event);
+            } else if (ev instanceof RouterAdvertisement) {
+                // Don't pass these along.
             } else if (ev instanceof BindingUpdate event) {
                 processBindingUpdate(event);
-//            } else if (ev instanceof IPv6Tunneled event) {
-//                var originalMessage = event.getOriginalPacket();
-//                forwardMessage(originalMessage);
+            } else if (ev instanceof IPv6Tunneled event) {
+                var original = event.getOriginalPacket();
+                forwardMessage(original);
             } else {
                 forwardMessage(message);
             }
@@ -93,19 +107,24 @@ public class Router extends SimEnt {
             System.err.printf("Cannot bind to interface %d: already in use%n", interfaceId);
             return;
         }
+        System.out.println("=========================== enter network");
 
-        connectInterface(interfaceId, ev.getNetworkId(), (Link) src);
-        send(src, new Connected(ev.getNetworkId()), 0);
+        connectInterface(interfaceId, (Link) src, new int[]{_baseNetwork + interfaceId});
     }
 
     protected void processLeaveNetwork(SimEnt src, LeaveNetwork ev) {
         disconnectInterface(ev.getSourceAddress().networkId());
-        send(src, new Disconnected(), 0);
     }
 
     protected void processRouterSolicitation(RouterSolicitation ev) {
-        var msg = new RouterAdvertisement(null, null, 0);
-        multicastMessage(msg, 0);
+        for (int i = 0; i < _routingTable.length; ++i) {
+            if (_routingTable[i] == null) continue;
+
+            // Advertise the network prefix as the current interface id.
+            var next = _routingTable[i].link();
+            var msg = new RouterAdvertisement(null, null, 0, _baseNetwork + i);
+            send(next, msg, 0);
+        }
     }
 
     protected void processBindingUpdate(BindingUpdate ev) {
@@ -130,14 +149,5 @@ public class Router extends SimEnt {
      */
     protected boolean isHomeAgent() {
         return false;
-    }
-
-    void multicastMessage(Message msg, int delayExecution) {
-        for (var entry : _routingTable) {
-            if (entry != null) {
-                System.out.println("<< " + entry.link());
-                send(entry.link(), msg, delayExecution);
-            }
-        }
     }
 }

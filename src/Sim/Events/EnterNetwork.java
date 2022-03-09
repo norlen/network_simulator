@@ -6,12 +6,10 @@ import Sim.SimEnt;
 public class EnterNetwork implements Event {
     private final SimEnt _src;
     private final int _interfaceId;
-    private final int _networkId;
 
-    public EnterNetwork(SimEnt src, int interfaceId, int networkId) {
+    public EnterNetwork(SimEnt src, int interfaceId) {
         _src = src;
         _interfaceId = interfaceId;
-        _networkId = networkId;
     }
 
     public SimEnt getSource() {
@@ -20,10 +18,6 @@ public class EnterNetwork implements Event {
 
     public int getInterfaceId() {
         return _interfaceId;
-    }
-
-    public int getNetworkId() {
-        return _networkId;
     }
 
     @Override

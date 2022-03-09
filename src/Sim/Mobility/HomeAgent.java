@@ -12,8 +12,8 @@ public class HomeAgent extends Router {
     //    LRUCache<NetworkAddr, NetworkAddr> _bindingCache = new LRUCache<>(100);
     private HashMap<Integer, NetworkAddr> _bindingCache = new HashMap<>();
 
-    public HomeAgent(int interfaces) {
-        super(interfaces);
+    public HomeAgent(int interfaces, int baseNetwork) {
+        super(interfaces, baseNetwork);
     }
 
     @Override
