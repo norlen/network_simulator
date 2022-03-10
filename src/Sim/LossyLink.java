@@ -91,6 +91,7 @@ public class LossyLink extends Link {
      * @return the delay for a packet in milliseconds.
      */
     private double getDelay() {
-        return _generator.nextDouble(_delay - _jitter, _delay + _jitter);
+        double jitter = _jitter * 2 * _generator.nextDouble() - _jitter;
+        return _delay + jitter;
     }
 }

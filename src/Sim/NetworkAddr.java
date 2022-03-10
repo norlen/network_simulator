@@ -9,6 +9,11 @@ package Sim;
  * IPv6 address.
  */
 public class NetworkAddr {
+    public static final NetworkAddr UNSPECIFIED = new NetworkAddr(0x0L, 0x0L);
+
+    public static final NetworkAddr ALL_NODES_MULTICAST = new NetworkAddr(0xFF02_0000_0000_0000L, 0x0000_0000_0000_0001);
+    public static final NetworkAddr ALL_ROUTER_MULTICAST = new NetworkAddr(0xFF02_0000_0000_0000L, 0x0000_0000_0000_0002);
+
     private long _networkId;
     private long _nodeId;
 

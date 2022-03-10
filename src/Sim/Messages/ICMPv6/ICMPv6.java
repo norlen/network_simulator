@@ -27,6 +27,7 @@ public abstract class ICMPv6 extends IPv6 {
      *
      * @param from source address.
      * @param to   destination address.
+     * @param seq  sequence number.
      * @param type ICMPv6 message type.
      * @param code ICMPv6 message code.
      */

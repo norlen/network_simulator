@@ -52,8 +52,8 @@ public class Run {
             host2_sink = new FileSink();
         }
 
-        long router1Prefix = 0x1111000000000000L;
-        long router2Prefix = 0x2222000000000000L;
+        long router1Prefix = 0x1111_0000_0000_0000L;
+        long router2Prefix = 0x2222_0000_0000_0000L;
         NetworkAddr host1Addr = new NetworkAddr(router1Prefix, 1);
         NetworkAddr host2Addr = new NetworkAddr(router2Prefix, 1);
 
