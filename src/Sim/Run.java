@@ -2,7 +2,6 @@ package Sim;
 
 // An example of how to build a topology and starting the simulation engine
 
-import Sim.Mobility.HomeAgent;
 import Sim.Traffic.*;
 
 import java.util.Date;
@@ -69,8 +68,8 @@ public class Run {
         //
         // Note. A switch is created in same way using the Switch class
 
-        Router routeNode = new HomeAgent("HA", 5, router1Prefix);
-        Router routeNode2 = new HomeAgent("R2", 5, router2Prefix);
+        Router routeNode = new Router("HA", 5, router1Prefix);
+        Router routeNode2 = new Router("R2", 5, router2Prefix);
         routeNode.connectInterface(0, router1Prefix, 64, link1);
         routeNode2.connectInterface(0, router2Prefix, 64, link2);
 
