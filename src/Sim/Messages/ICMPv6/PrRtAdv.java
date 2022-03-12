@@ -5,24 +5,22 @@ import Sim.NetworkAddr;
 /**
  * Proxy Router Advertisement (PrRtAdv)
  * <p>
+ * We send a simplified version of this, which is similar to regular advertisements. We also require that they be
+ * solicited so flags for such things are also ignored.
+ * <p>
  * Reference: https://datatracker.ietf.org/doc/html/rfc5568#section-6.1.2
  */
-public class PrRtAdv extends ICMPv6 {
-    // ICMP type for Router Solicitation.
-    public static final int ICMP_TYPE = 154;
-
-    // ICMP code for Router Solicitation.
-    public static final int ICMP_CODE = 0;
-
-
+public class PrRtAdv extends RouterAdvertisement {
     /**
-     * Creates a new ICMPv6 message.
+     * Creates a new proxy router advertisement message.
      *
-     * @param from source address.
-     * @param to   destination address.
-     * @param seq
+     * @param from          link-local address of sender.
+     * @param to            source address of invoking router or the all nodes multicast address.
+     * @param seq           sequence number.
+     * @param name          next access router's name.
+     * @param networkPrefix next access router's network prefix address, which all interface addresses are derived from.
      */
-    public PrRtAdv(NetworkAddr from, NetworkAddr to, int seq) {
-        super(from, to, seq, ICMP_TYPE, ICMP_CODE);
+    public PrRtAdv(NetworkAddr from, NetworkAddr to, int seq, String name, long networkPrefix) {
+        super(from, to, seq, name, networkPrefix);
     }
 }

@@ -31,7 +31,7 @@ public class Router extends SimEnt {
 
     // Proxy advertisement cache. To send out Proxy Router Advertisements, we store advertisements received by
     // neighboring routers.
-    private final HashMap<NetworkAddr, RouterAdvertisement> _rtAdv = new HashMap<>();
+    private final HashMap<String, Long> _rtAdv = new HashMap<String, Long>();
 
     // When created, number of interfaces are defined
     public Router(String name, int interfaces, long basePrefix) {
@@ -130,14 +130,14 @@ public class Router extends SimEnt {
      * @param ev  the ICMPv6 message.
      */
     protected void processICMPMessage(SimEnt src, ICMPv6 ev) {
-        if (ev instanceof RouterSolicitation msg) {
-            processRouterSolicitation(msg);
-        } else if (ev instanceof RouterAdvertisement msg) {
-            processRouterAdvertisement(msg);
-        } else if (ev instanceof RtSolPr msg) {
+        if (ev instanceof RtSolPr msg) {
             processRtSolPr(msg);
         } else if (ev instanceof PrRtAdv msg) {
             processPrRtAdv(msg);
+        } else if (ev instanceof RouterSolicitation msg) {
+            processRouterSolicitation(msg);
+        } else if (ev instanceof RouterAdvertisement msg) {
+            processRouterAdvertisement(msg);
         }
     }
 
@@ -230,8 +230,9 @@ public class Router extends SimEnt {
             // Generate a new network for something that connected.
             long network = _basePrefix + i;
 
-            // Advertise the network prefix as the current interface id.
-            var msg = new RouterAdvertisement(null, null, 0, network);
+            // Advertise the network prefix as the current interface id. We don't have an address for routers, so use
+            // the unspecified address for now.
+            var msg = new RouterAdvertisement(NetworkAddr.UNSPECIFIED, NetworkAddr.ALL_NODES_MULTICAST, 0, _name, network);
             send(link, msg, 0);
         }
     }
@@ -245,8 +246,9 @@ public class Router extends SimEnt {
     protected void processRouterAdvertisement(RouterAdvertisement ev) {
         // To support the Fast Mobile IPv6 Handovers we store these advertisements, so we can respond to RtSolPr
         // requests, where a Mobile Node can solicit advertisements from nearby routers.
-
-        // todo
+        String apName = ev.getName();
+        long apPrefix = ev.getNetworkPrefix();
+        _rtAdv.put(apName, apPrefix);
     }
 
     /**
@@ -258,8 +260,12 @@ public class Router extends SimEnt {
      * @param ev the Router Solicitation for Proxy Advertisement message.
      */
     protected void processRtSolPr(RtSolPr ev) {
-        // todo
-        // respond with the stored advertisement shit
+        String narName = ev.getNextAccessRouterName();
+        if (_rtAdv.containsKey(narName)) {
+            long networkPrefix = _rtAdv.get(narName);
+            var advertisement = new PrRtAdv(NetworkAddr.UNSPECIFIED, ev.source(), 0, narName, networkPrefix);
+            forwardMessage(advertisement);
+        }
     }
 
     /**
@@ -281,12 +287,18 @@ public class Router extends SimEnt {
      * @param ev the Binding Update message.
      */
     protected void processBindingUpdate(BindingUpdate ev) {
-        // TODO: What happens if we want to forward these to the correct HA?
-        var homeAddress = ev.destination();
-        var careOfAddress = ev.source();
+        // Check if this binding update is intended for this router.
+        if (ev.destination().networkId() == _basePrefix) {
+            // This should be forwarded to the correct HA.
+            forwardMessage(ev);
+        } else {
+            // This is intended for us, so add a care of address.
+            var homeAddress = ev.destination();
+            var careOfAddress = ev.source();
 
-        System.out.printf("== %s update binding from %s to %s%n", this, homeAddress, careOfAddress);
-        _bindingCache.put(homeAddress.networkId(), careOfAddress);
+            System.out.printf("== %s update binding from %s to %s%n", this, homeAddress, careOfAddress);
+            _bindingCache.put(homeAddress.networkId(), careOfAddress);
+        }
     }
 
     /**

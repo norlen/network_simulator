@@ -10,13 +10,14 @@ import Sim.NetworkAddr;
  * Reference: https://datatracker.ietf.org/doc/html/rfc4861#section-4.1
  */
 public class RouterSolicitation extends ICMPv6 {
-    // ICMP type for Router Solicitation.
-    public static final int ICMP_TYPE = 133;
-
-    // ICMP code for Router Solicitation.
-    public static final int ICMP_CODE = 0;
-
-    public RouterSolicitation(NetworkAddr from, int seq) {
-        super(from, null, seq, ICMP_TYPE, ICMP_CODE);
+    /**
+     * Instantiates a solicitation message.
+     *
+     * @param from IP address of interface or the unspecified address.
+     * @param to   the all routers multicast address.
+     * @param seq  sequence number.
+     */
+    public RouterSolicitation(NetworkAddr from, NetworkAddr to, int seq) {
+        super(from, to, seq);
     }
 }

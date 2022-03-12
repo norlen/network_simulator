@@ -6,6 +6,7 @@ import Sim.Events.EnterNetwork;
 import Sim.Events.LeaveNetwork;
 import Sim.Messages.ICMPv6.RouterAdvertisement;
 import Sim.Messages.ICMPv6.RouterSolicitation;
+import Sim.Messages.ICMPv6.RtSolPr;
 import Sim.Messages.IPv6Tunneled;
 import Sim.Messages.MobileIPv6.BindingAck;
 import Sim.Messages.MobileIPv6.BindingUpdate;
@@ -14,6 +15,8 @@ import Sim.Traffic.TrafficGenerator;
 
 // This class implements a node (host) it has an address, a peer that it communicates with
 // and it count messages send and received.
+
+// TODO: add home agent address.
 
 /**
  *
@@ -62,10 +65,6 @@ public class Node extends SimEnt {
         if (_peer instanceof Link link) {
             link.setConnector(this);
         }
-    }
-
-    public NetworkAddr getLinkLocalAddr() {
-        return _linkLocal;
     }
 
     public NetworkAddr getHomeAddress() {
@@ -119,6 +118,13 @@ public class Node extends SimEnt {
         }
     }
 
+    protected void fastHandover(String nar) {
+        // New Access Point Link-Layer Address: The link-layer address or
+        // identification of the access point for which the MN requests
+        // routing advertisement information.
+        var msg = new RtSolPr(_homeAddress, NetworkAddr.ALL_ROUTER_MULTICAST, _seq++, nar);
+    }
+
     protected void processTimerEvent(TimerEvent event) {
         if (_trafficGenerator != null && _trafficGenerator.shouldSend()) {
             System.out.printf("%s sent message to %s with seq: %d at time: %f%n", this, _dst, _seq, SimEngine.getTime());
@@ -151,9 +157,11 @@ public class Node extends SimEnt {
     protected void processConnected(Connected ev) {
         System.out.printf("-- %s connected to network at time: %f%n", this, SimEngine.getTime());
 
+        // TODO: Dont send if we don't need to.
+        
         // Send a Router Solicitation straight away, we skip the random delay since we are a mobile node.
         // RFC 4861 (https://datatracker.ietf.org/doc/html/rfc4861) mentions that the delay may be omitted for this.
-        var msg = new RouterSolicitation(_linkLocal, _seq++);
+        var msg = new RouterSolicitation(NetworkAddr.UNSPECIFIED, NetworkAddr.ALL_ROUTER_MULTICAST, _seq++);
         sendMessage(msg);
     }
 
