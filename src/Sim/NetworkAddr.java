@@ -16,10 +16,21 @@ public class NetworkAddr {
 
     private long _networkId;
     private long _nodeId;
+    private int _prefix;
+    private long _mask;
 
     public NetworkAddr(long network, long node) {
         _networkId = network;
         _nodeId = node;
+        _prefix = 64;
+        _mask = createMask(_prefix);
+    }
+
+    public NetworkAddr(long network, long node, int prefix) {
+        _networkId = network;
+        _nodeId = node;
+        _prefix = prefix;
+        _mask = createMask(_prefix);
     }
 
     public long networkId() {
@@ -30,12 +41,34 @@ public class NetworkAddr {
         return _nodeId;
     }
 
+    public boolean matches(long networkId) {
+        return (_networkId & _mask) == (networkId & _mask);
+    }
+
+    public int getPrefixBits() {
+        return _prefix;
+    }
+
     @Override
     public String toString() {
-        return String.format("%s:%s", getHex(_networkId), getHex(_nodeId));
+        return String.format("%s:%s/%d", getHex(_networkId), getHex(_nodeId), _prefix);
     }
 
     private String getHex(long part) {
         return String.format("%h:%h:%h:%h", (part >> 48) & 0xFFFF, (part >> 32) & 0xFFFF, (part >> 16) & 0xFFFF, part & 0xFFFF);
+    }
+
+    /**
+     * Generates the mask to mask out all the bits of the prefix part.
+     *
+     * @return mask with the first numBits bits set.
+     */
+    private long createMask(int numBits) {
+        long mask = 0;
+        for (int i = 0; i < (64 - numBits); ++i) {
+            mask <<= 1;
+            mask |= 1;
+        }
+        return ~mask;
     }
 }

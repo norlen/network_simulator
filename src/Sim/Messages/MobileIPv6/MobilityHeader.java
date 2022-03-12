@@ -11,15 +11,7 @@ import Sim.NetworkAddr;
 public abstract class MobilityHeader extends IPv6 {
     // This is not an exhaustive list of fields, see the reference for that. Only the used fields are present.
 
-    // todo
-    private final int _mhType;
-
-    public MobilityHeader(NetworkAddr from, NetworkAddr to, int seq, int mhType) {
+    public MobilityHeader(NetworkAddr from, NetworkAddr to, int seq) {
         super(from, to, seq);
-        _mhType = mhType;
-    }
-
-    public int getMHType() {
-        return _mhType;
     }
 }

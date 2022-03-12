@@ -51,13 +51,13 @@ public class Run {
             host2_sink = new FileSink();
         }
 
-        long router1Prefix = 0x1111_0000_0000_0000L;
-        long router2Prefix = 0x2222_0000_0000_0000L;
-        NetworkAddr host1Addr = new NetworkAddr(router1Prefix, 1);
-        NetworkAddr host2Addr = new NetworkAddr(router2Prefix, 1);
+        var HNAddress = new NetworkAddr(0x1111_0000_0000_0000L, 0, 32);
+        var FNAddress = new NetworkAddr(0x2222_0000_0000_0000L, 0, 32);
+        var MNAddress = new NetworkAddr(0x1111_0000_0000_0000L, 1);
+        var CNAddress = new NetworkAddr(0x2222_0000_0000_0000L, 2);
 
-        Node host1 = new Node("MN", host1Addr, host1_traffic, host1_sink);
-        Node host2 = new Node("CN", host2Addr, host2_traffic, host2_sink);
+        Node host1 = new Node("MN", MNAddress, HNAddress, host1_traffic, host1_sink);
+        Node host2 = new Node("CN", CNAddress, FNAddress, host2_traffic, host2_sink);
 
         // Connect links to hosts
         host1.setPeer(link1);
@@ -68,21 +68,21 @@ public class Run {
         //
         // Note. A switch is created in same way using the Switch class
 
-        Router routeNode = new Router("HA", 5, router1Prefix);
-        Router routeNode2 = new Router("R2", 5, router2Prefix);
-        routeNode.connectInterface(0, router1Prefix, 64, link1);
-        routeNode2.connectInterface(0, router2Prefix, 64, link2);
+        Router routeNode = new Router("HA", 5, HNAddress);
+        Router routeNode2 = new Router("R2", 5, FNAddress);
+        routeNode.connectInterface(0, MNAddress, link1);
+        routeNode2.connectInterface(0, CNAddress, link2);
 
         Link routerToRouter = new Link();
-        routeNode.connectInterface(1, router2Prefix, 32, routerToRouter);
-        routeNode2.connectInterface(1, router1Prefix, 32, routerToRouter);
+        routeNode.connectInterface(1, FNAddress, routerToRouter);
+        routeNode2.connectInterface(1, HNAddress, routerToRouter);
 
         //SimEngine.instance().register(link1, routeNode, new EnterNetwork(host1, 0), 0);
         //SimEngine.instance().register(link2, routeNode2, new EnterNetwork(host2, 0), 0);
 
         // Generate some traffic
-        host1.StartSending(host2Addr, 0);
-        host2.StartSending(host1Addr, 0);
+        host1.StartSending(CNAddress, 0);
+        host2.StartSending(MNAddress, 0);
 
         // Start the simulation engine and of we go!
         Thread t = new Thread(SimEngine.instance());

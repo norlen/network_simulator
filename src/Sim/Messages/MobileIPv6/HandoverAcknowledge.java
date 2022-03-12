@@ -8,6 +8,8 @@ import Sim.NetworkAddr;
  * Reference: https://datatracker.ietf.org/doc/html/rfc5568#section-6.2.1.2
  */
 public class HandoverAcknowledge extends MobilityHeader {
+    // Identifier so Handover Acknowledgements can be matched.
+    private final int _identifier;
 
     /**
      * Message sent as a reply to the Handover Initiate (HI) message.
@@ -16,7 +18,12 @@ public class HandoverAcknowledge extends MobilityHeader {
      * @param to   the HI source address.
      * @param seq  sequence number.
      */
-    public HandoverAcknowledge(NetworkAddr from, NetworkAddr to, int seq) {
-        super(from, to, seq, 0);
+    public HandoverAcknowledge(NetworkAddr from, NetworkAddr to, int seq, int identifier) {
+        super(from, to, seq);
+        _identifier = identifier;
+    }
+
+    public int getIdentifier() {
+        return _identifier;
     }
 }

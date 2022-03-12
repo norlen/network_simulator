@@ -44,7 +44,15 @@ public class Link extends SimEnt {
 
     // Called when a message enters the link
     public void recv(SimEnt src, Event ev) {
-        if (ev instanceof Message || ev instanceof EnterNetwork || ev instanceof LeaveNetwork) {
+        if (ev instanceof EnterNetwork event) {
+            if (event.getRouter() == null) {
+                forward(src, ev);
+            } else {
+                send(event.getRouter(), ev, 0);
+            }
+        } else if (ev instanceof LeaveNetwork) {
+            forward(src, ev);
+        } else if (ev instanceof Message) {
             forward(src, ev);
         }
     }

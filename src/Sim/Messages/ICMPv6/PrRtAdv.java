@@ -11,6 +11,9 @@ import Sim.NetworkAddr;
  * Reference: https://datatracker.ietf.org/doc/html/rfc5568#section-6.1.2
  */
 public class PrRtAdv extends RouterAdvertisement {
+    // Name of the interface this advertisement came from, this is pretty much our link-local address.
+    private final String _interfaceName;
+
     /**
      * Creates a new proxy router advertisement message.
      *
@@ -20,7 +23,17 @@ public class PrRtAdv extends RouterAdvertisement {
      * @param name          next access router's name.
      * @param networkPrefix next access router's network prefix address, which all interface addresses are derived from.
      */
-    public PrRtAdv(NetworkAddr from, NetworkAddr to, int seq, String name, long networkPrefix) {
+    public PrRtAdv(NetworkAddr from, NetworkAddr to, int seq, String name, long networkPrefix, String interfaceName) {
         super(from, to, seq, name, networkPrefix);
+        _interfaceName = interfaceName;
+    }
+
+    /**
+     * Returns the name of the interface this advertisement comes from.
+     *
+     * @return name of interface.
+     */
+    public String getInterfaceName() {
+        return _interfaceName;
     }
 }

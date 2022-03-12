@@ -7,8 +7,38 @@ import Sim.NetworkAddr;
  * <p>
  * Reference: https://datatracker.ietf.org/doc/html/rfc5568#section-6.2.2
  */
-public class FastBindingUpdate extends MobilityHeader {
-    public FastBindingUpdate(NetworkAddr from, NetworkAddr to, int seq, int mhType) {
-        super(from, to, seq, mhType);
+public class FastBindingUpdate extends BindingUpdate {
+    // The new care of address, which is in the NAR network.
+    private final NetworkAddr _newCareOfAddress;
+
+    // Next router's interface name.
+    private final String _interfaceName;
+
+    /**
+     * Create a FastBindingUpdate message. These can in reality be sent both from the previous network and the new
+     * network. In our implementation we only support sending these from the previous network.
+     *
+     * @param from             the current care of address.
+     * @param to               the current router.
+     * @param seq              sequence number.
+     * @param newCareOfAddress the new care of address in the next router network.
+     */
+    public FastBindingUpdate(NetworkAddr from, NetworkAddr to, int seq, String interfaceName, NetworkAddr newCareOfAddress) {
+        super(from, to, seq);
+        _interfaceName = interfaceName;
+        _newCareOfAddress = newCareOfAddress;
+    }
+
+    /**
+     * Gets the new care of address.
+     *
+     * @return new care of address.
+     */
+    public NetworkAddr getNewCareOfAddress() {
+        return _newCareOfAddress;
+    }
+
+    public String getInterfaceName() {
+        return _interfaceName;
     }
 }

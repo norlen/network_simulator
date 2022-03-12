@@ -8,8 +8,6 @@ import Sim.NetworkAddr;
  * Reference: https://datatracker.ietf.org/doc/html/rfc6275#section-6.1.8
  */
 public class BindingAck extends MobilityHeader {
-    public static final int MHType = 6;
-
     public static final int STATUS_ACCEPTED = 0;
     public static final int STATUS_ACCEPTED_BUT_DISCOVERY_NECESSARY = 1;
     public static final int REJECTED_REASON_UNSPECIFIED = 128;
@@ -25,6 +23,10 @@ public class BindingAck extends MobilityHeader {
     private final int _sequence = 0;
 
     public BindingAck(NetworkAddr from, NetworkAddr to, int seq) {
-        super(from, to, seq, MHType);
+        super(from, to, seq);
+    }
+
+    public int getSequence() {
+        return _sequence;
     }
 }

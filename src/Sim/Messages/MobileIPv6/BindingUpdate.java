@@ -8,8 +8,6 @@ import Sim.NetworkAddr;
  * Reference: https://datatracker.ietf.org/doc/html/rfc6275#section-6.1.7
  */
 public class BindingUpdate extends MobilityHeader {
-    public static final int MHType = 5;
-
     // Set to request a Binding Acknowledgement.
     private final boolean _acknowledge = false;
 
@@ -23,6 +21,10 @@ public class BindingUpdate extends MobilityHeader {
     private final int _lifetime = 0;
 
     public BindingUpdate(NetworkAddr from, NetworkAddr to, int seq) {
-        super(from, to, seq, MHType);
+        super(from, to, seq);
+    }
+
+    public int getSequence() {
+        return _sequence;
     }
 }

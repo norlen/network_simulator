@@ -1,15 +1,9 @@
 package Sim;
 
-import Sim.Events.Connected;
-import Sim.Events.Disconnected;
-import Sim.Events.EnterNetwork;
-import Sim.Events.LeaveNetwork;
-import Sim.Messages.ICMPv6.RouterAdvertisement;
-import Sim.Messages.ICMPv6.RouterSolicitation;
-import Sim.Messages.ICMPv6.RtSolPr;
+import Sim.Events.*;
+import Sim.Messages.ICMPv6.*;
 import Sim.Messages.IPv6Tunneled;
-import Sim.Messages.MobileIPv6.BindingAck;
-import Sim.Messages.MobileIPv6.BindingUpdate;
+import Sim.Messages.MobileIPv6.*;
 import Sim.Traffic.Sink;
 import Sim.Traffic.TrafficGenerator;
 
@@ -22,6 +16,9 @@ import Sim.Traffic.TrafficGenerator;
  *
  */
 public class Node extends SimEnt {
+    private record Handover(NetworkAddr newCareOfAddress, SimEnt router, int interfaceId) {
+    }
+
     // Link-local address.
     protected NetworkAddr _linkLocal;
 
@@ -30,6 +27,9 @@ public class Node extends SimEnt {
 
     // The node's care of address.
     protected NetworkAddr _careOfAddress;
+
+    // Address to home agent.
+    protected NetworkAddr _homeAgent;
 
     // Flag to check if we have performed the stateless autoconfiguration.
     protected boolean _ipConfigurationCompleted = true;
@@ -48,12 +48,14 @@ public class Node extends SimEnt {
     private int _seq = 0;
 
     private final String _name;
+    private Handover _handover = null;
 
-    public Node(String name, NetworkAddr addr, TrafficGenerator generator, Sink sink) {
+    public Node(String name, NetworkAddr addr, NetworkAddr haAddress, TrafficGenerator generator, Sink sink) {
         super();
         _name = name;
         _linkLocal = new NetworkAddr(0xfe80000000000000L, addr.nodeId());
         _homeAddress = addr;
+        _homeAgent = haAddress;
         _trafficGenerator = generator;
         _sink = sink;
     }
@@ -98,31 +100,83 @@ public class Node extends SimEnt {
             processConnected(event);
         } else if (ev instanceof Disconnected event) {
             processDisconnected(event);
+        } else if (ev instanceof StartHandover event) {
+            processStartHandover(event);
         } else if (ev instanceof TimerEvent event) {
             processTimerEvent(event);
+        } else if (ev instanceof ICMPv6 msg) {
+            processICMPMessage(msg);
+        } else if (ev instanceof MobilityHeader msg) {
+            processMobilityHeader(msg);
+        } else if (ev instanceof Message msg) {
+            processMessage(src, msg);
         } else if (ev instanceof Message msg) {
             if (ev instanceof RouterAdvertisement event) {
                 processRouterAdvertisement(event);
             } else if (ev instanceof BindingAck event) {
                 processBindingUpdateAck(event);
             } else if (ev instanceof IPv6Tunneled event) {
-                System.out.printf("-- %s receives tunneled message with seq: %d at time: %f%n", this, event.seq(), SimEngine.getTime());
-                recv(src, event.getOriginalPacket());
+
             } else {
-                // Generic message, no specific handling.
-                System.out.printf("%s receives message with seq: %d at time: %f%n", this, msg.seq(), SimEngine.getTime());
-                if (_sink != null) {
-                    _sink.process(src, ev);
-                }
             }
         }
     }
 
-    protected void fastHandover(String nar) {
-        // New Access Point Link-Layer Address: The link-layer address or
-        // identification of the access point for which the MN requests
-        // routing advertisement information.
-        var msg = new RtSolPr(_homeAddress, NetworkAddr.ALL_ROUTER_MULTICAST, _seq++, nar);
+    public void processICMPMessage(ICMPv6 ev) {
+        if (ev instanceof PrRtAdv msg) {
+
+        } else if (ev instanceof RtSolPr msg) {
+            // Should not get.
+        } else if (ev instanceof RouterAdvertisement msg) {
+
+        } else if (ev instanceof RouterSolicitation msg) {
+            // Should not get.
+        }
+    }
+
+    public void processMobilityHeader(MobilityHeader ev) {
+        if (ev instanceof FastBindingUpdate msg) {
+            // Should not get.
+        } else if (ev instanceof FastBindingAck msg) {
+
+        } else if (ev instanceof BindingUpdate msg) {
+            // Should not get.
+        } else if (ev instanceof BindingAck msg) {
+
+        } else if (ev instanceof HandoverInitiate msg) {
+            // Should not get.
+        } else if (ev instanceof HandoverAcknowledge msg) {
+            // Should not get.
+        }
+    }
+
+    public void processMessage(SimEnt src, Message ev) {
+        if (ev instanceof IPv6Tunneled msg) {
+            System.out.printf("-- %s receives tunneled message with seq: %d at time: %f%n", this, msg.seq(), SimEngine.getTime());
+            recv(src, msg.getOriginalPacket());
+            return;
+        }
+
+        // Generic message, no specific handling.
+        System.out.printf("%s receives message with seq: %d at time: %f%n", this, ev.seq(), SimEngine.getTime());
+        if (_sink != null) {
+            _sink.process(src, ev);
+        }
+    }
+
+    protected void processConnected(Connected ev) {
+        System.out.printf("-- %s connected to network at time: %f%n", this, SimEngine.getTime());
+
+        // Only send if we have not configured our IPs yet, we might have done this if we performed a fast handover.
+        if (_homeAddress == null || _careOfAddress == null) {
+            // Send a Router Solicitation straight away, we skip the random delay since we are a mobile node.
+            // RFC 4861 (https://datatracker.ietf.org/doc/html/rfc4861) mentions that the delay may be omitted for this.
+            var msg = new RouterSolicitation(NetworkAddr.UNSPECIFIED, NetworkAddr.ALL_ROUTER_MULTICAST, _seq++);
+            sendMessage(msg);
+        }
+    }
+
+    protected void processDisconnected(Disconnected ev) {
     }
 
     protected void processTimerEvent(TimerEvent event) {
@@ -133,7 +187,7 @@ public class Node extends SimEnt {
                 // Leave the current network and join the new network.
                 System.out.printf("-- %s leaving current network and tries to join new network%n", this);
                 sendMessage(new LeaveNetwork(getCurrentAddress()));
-                sendMessage(new EnterNetwork(this, 3));
+                sendMessage(new EnterNetwork(this, null, 3));
                 _ipConfigurationCompleted = false;
                 _careOfAddress = null;
             }
@@ -154,21 +208,12 @@ public class Node extends SimEnt {
         }
     }
 
-    protected void processConnected(Connected ev) {
-        System.out.printf("-- %s connected to network at time: %f%n", this, SimEngine.getTime());
-
-        // TODO: Dont send if we don't need to.
-        
-        // Send a Router Solicitation straight away, we skip the random delay since we are a mobile node.
-        // RFC 4861 (https://datatracker.ietf.org/doc/html/rfc4861) mentions that the delay may be omitted for this.
-        var msg = new RouterSolicitation(NetworkAddr.UNSPECIFIED, NetworkAddr.ALL_ROUTER_MULTICAST, _seq++);
+    protected void processStartHandover(StartHandover ev) {
+        // We want to switch to a new network soon. So start the handover process.
+        var msg = new RtSolPr(getCurrentAddress(), NetworkAddr.ALL_ROUTER_MULTICAST, _seq++, ev.getNextAccessRouter(), ev.getNextInterfaceId());
         sendMessage(msg);
-    }
 
-    protected void processDisconnected(Disconnected ev) {
-        // Remove care of address if it exists, and make sure we perform ip configuration on next connect.
-//        _ipConfigurationCompleted = false;
-//        _careOfAddress = null;
+        _handover = new Handover(null, ev.getRouter(), ev.getNextInterfaceId());
     }
 
     protected void processRouterAdvertisement(RouterAdvertisement ev) {
@@ -189,10 +234,10 @@ public class Node extends SimEnt {
 
             // Check if we re-entered the home network.
             if (_homeAddress.networkId() == prefix) {
-                msg = new BindingUpdate(_homeAddress, _homeAddress, _seq++);
+                msg = new BindingUpdate(_homeAddress, _homeAgent, _seq++);
             } else {
                 _careOfAddress = new NetworkAddr(prefix, _linkLocal.nodeId());
-                msg = new BindingUpdate(_careOfAddress, _homeAddress, _seq++);
+                msg = new BindingUpdate(_careOfAddress, _homeAgent, _seq++);
             }
             sendMessage(msg);
         }
@@ -203,9 +248,29 @@ public class Node extends SimEnt {
         _ipConfigurationCompleted = true;
     }
 
+    protected void processPrRtAdv(PrRtAdv ev) {
+        var nextCareOfAddress = new NetworkAddr(ev.getNetworkPrefix(), _linkLocal.nodeId());
+        var msg = new FastBindingUpdate(getCurrentAddress(), _homeAddress, _seq++, ev.getInterfaceName(), nextCareOfAddress);
+        sendMessage(msg);
+
+        _handover = new Handover(nextCareOfAddress, _handover.router, _handover.interfaceId);
+    }
+
     protected void processBindingUpdateAck(BindingAck ev) {
-        // Not sure what to do here.
         System.out.printf("-- %s receives BindingAck with seq: %d at time %f%n", this, ev.seq(), SimEngine.getTime());
+    }
+
+    protected void processFastBindingAck(FastBindingAck ev) {
+        // When we this ack, the fast handover process is completed, and we should disconnect from the current network,
+        // and join the new network.
+        System.out.printf("-- %s receives FastBindingAck with seq: %d at time %f%n", this, ev.seq(), SimEngine.getTime());
+
+        var LeaveEvent = new LeaveNetwork(getCurrentAddress());
+        var JoinEvent = new EnterNetwork(this, _handover.router, _handover.interfaceId);
+        _careOfAddress = _handover.newCareOfAddress;
+
+        sendMessage(LeaveEvent);
+        sendMessage(JoinEvent);
     }
 
     public TrafficGenerator getTrafficGenerator() {

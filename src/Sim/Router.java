@@ -7,13 +7,23 @@ import Sim.Messages.IPv6Tunneled;
 import Sim.Messages.MobileIPv6.*;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 
 /**
  * todo
  */
 public class Router extends SimEnt {
+    private record ProxyAdvertisementEntry(NetworkAddr interfaceAddr,
+                                           NetworkAddr from,
+                                           PrRtAdv advertisement) {
+    }
+
+    private record FastHandover(int sequence,
+                                NetworkAddr homeAgentAddress,
+                                NetworkAddr currentCareOfAddress,
+                                NetworkAddr nextCareOfAddress) {
+    }
+
     // The router's name.
     private final String _name;
 
@@ -23,39 +33,43 @@ public class Router extends SimEnt {
     // Notes if the interfaces are currently in use.
     private final SimEnt[] _interfaces;
 
-    // The router's base prefix which it uses to generate networks on its interfaces.
-    private final long _basePrefix;
+    // Base address to generate network addresses from.
+    private final NetworkAddr _baseAddress;
 
     // Cache for home addresses to current care of addresses.
-    private HashMap<Long, NetworkAddr> _bindingCache = new HashMap<>();
+    private final HashMap<Long, NetworkAddr> _bindingCache = new HashMap<>();
 
-    // Proxy advertisement cache. To send out Proxy Router Advertisements, we store advertisements received by
-    // neighboring routers.
-    private final HashMap<String, Long> _rtAdv = new HashMap<String, Long>();
+    // Hard-coded advertisements from neighbor routers, used for proxy advertisements.
+    //private final HashMap<String, PrRtAdv> _proxyAdvertisements = new HashMap<>();
 
-    // When created, number of interfaces are defined
-    public Router(String name, int interfaces, long basePrefix) {
-        _interfaces = new SimEnt[interfaces];
-        _basePrefix = basePrefix;
+    // So to make this work we send proxy advertisements to other routers, so they can store those for routers that are
+    // one hop away.
+    private final HashMap<String, ProxyAdvertisementEntry> _proxyAdvertisements = new HashMap<>();
+
+    private final HashMap<Integer, FastHandover> _handovers = new HashMap<>();
+
+    /**
+     * Instantiate a new router.
+     *
+     * @param name       name of the router.
+     * @param interfaces maximum number of interfaces.
+     * @param baseAddr   address to use as base for network addresses.
+     */
+    public Router(String name, int interfaces, NetworkAddr baseAddr) {
         _name = name;
+        _interfaces = new SimEnt[interfaces];
+        _baseAddress = baseAddr;
     }
 
     // This method connects links to the router and also informs the
     // router of the host connects to the other end of the link
-    public void connectInterface(int interfaceNumber, long prefix, int numBits, Link link) {
+    public void connectInterface(int interfaceNumber, NetworkAddr addr, Link link) {
         if (interfaceNumber < _interfaces.length) {
-            var entry = new RouteTableEntry(link, prefix, numBits, interfaceNumber);
+            var entry = new RouteTableEntry(link, addr, interfaceNumber);
             _interfaces[interfaceNumber] = link;
             _routingTable.add(entry);
-            Collections.sort(_routingTable, (lhs, rhs) -> {
-                if (lhs.getNetworkId() < rhs.getNetworkId()) {
-                    return -1;
-                } else if (lhs.getNetworkId() > rhs.getNetworkId()) {
-                    return 1;
-                } else {
-                    return 0;
-                }
-            });
+            _routingTable.sort((lhs, rhs) -> rhs.getAddr().getPrefixBits() - lhs.getAddr().getPrefixBits());
+            debugRoutingTables();
         } else {
             System.out.printf("ERR: %s: trying to connect to port not in router", this);
         }
@@ -66,13 +80,13 @@ public class Router extends SimEnt {
     /**
      * Disconnect the interface having a certain network id.
      *
-     * @param networkId
+     * @param networkId which network to disconnect.
      */
     public void disconnectInterface(long networkId) {
         // Find all the table entries that map to this interface and remove those.
         ArrayList<RouteTableEntry> keep = new ArrayList<>();
         for (RouteTableEntry entry : _routingTable) {
-            if (entry.getNetworkId() != networkId) {
+            if (entry.getAddr().networkId() != networkId) {
                 keep.add(entry);
             } else {
                 _interfaces[entry.getInterfaceId()] = null;
@@ -86,7 +100,7 @@ public class Router extends SimEnt {
     // represents that network number is returned
     private SimEnt getInterface(long networkAddress) {
         for (var entry : _routingTable) {
-            if (entry.matches(networkAddress)) {
+            if (entry.getAddr().matches(networkAddress)) {
                 return entry.link();
             }
         }
@@ -131,11 +145,11 @@ public class Router extends SimEnt {
      */
     protected void processICMPMessage(SimEnt src, ICMPv6 ev) {
         if (ev instanceof RtSolPr msg) {
-            processRtSolPr(msg);
+            processRtSolPr(src, msg);
         } else if (ev instanceof PrRtAdv msg) {
-            processPrRtAdv(msg);
+            processPrRtAdv(src, msg);
         } else if (ev instanceof RouterSolicitation msg) {
-            processRouterSolicitation(msg);
+            processRouterSolicitation(src, msg);
         } else if (ev instanceof RouterAdvertisement msg) {
             processRouterAdvertisement(msg);
         }
@@ -148,45 +162,18 @@ public class Router extends SimEnt {
      * @param ev  the Mobility Header message.
      */
     protected void processMobilityMessage(SimEnt src, MobilityHeader ev) {
-        if (ev instanceof BindingUpdate msg) {
-            processBindingUpdate(msg);
-        } else if (ev instanceof BindingAck msg) {
-            processBindingAck(msg);
-        } else if (ev instanceof FastBindingUpdate msg) {
+        if (ev instanceof FastBindingUpdate msg) {
             processFastBindingUpdate(msg);
         } else if (ev instanceof FastBindingAck msg) {
             processFastBindingAck(msg);
+        } else if (ev instanceof BindingUpdate msg) {
+            processBindingUpdate(msg);
+        } else if (ev instanceof BindingAck msg) {
+            processBindingAck(msg);
         } else if (ev instanceof HandoverInitiate msg) {
             processHandoverInitiate(msg);
         } else if (ev instanceof HandoverAcknowledge msg) {
             processHandoverAck(msg);
-        }
-    }
-
-    /**
-     * Process a IPv6Tunneled message. This is separate function from the regular forwarding so Home Agents can
-     * unpack and send the MN.
-     *
-     * @param ev the tunneled message.
-     */
-    protected void processTunneledMessage(IPv6Tunneled ev) {
-        // If we received a tunneled message where the source is a mobile agent we care for, then we should unwrap it
-        // and forward the original message.
-        boolean caresFor = false;
-        for (var entry : _bindingCache.entrySet()) {
-            if (entry.getValue() == ev.source()) {
-                caresFor = true;
-                break;
-            }
-        }
-
-        if (caresFor) {
-            var original = ev.getOriginalPacket();
-            System.out.printf("%s received tunneled message %d from %s which it cares for. Unpacking and forwarding to %s", this, ev.seq(), ev.source(), original.destination());
-            forwardMessage(original);
-        } else {
-            System.out.printf("%s received tunneled message %d. Do nothing and pass along to %s", this, ev.seq(), ev.destination());
-            forwardMessage(ev);
         }
     }
 
@@ -204,7 +191,8 @@ public class Router extends SimEnt {
             return;
         }
 
-        connectInterface(interfaceId, _basePrefix + interfaceId, 64, (Link) src);
+        var addr = new NetworkAddr(getInterfaceAddress(interfaceId), 64);
+        connectInterface(interfaceId, addr, (Link) src);
     }
 
     /**
@@ -218,22 +206,41 @@ public class Router extends SimEnt {
     }
 
     /**
+     * Process a IPv6Tunneled message. This is separate function from the regular forwarding so Home Agents can
+     * unpack and send the MN.
+     *
+     * @param ev the tunneled message.
+     */
+    protected void processTunneledMessage(IPv6Tunneled ev) {
+        // Check if this is addressed to us, in that case unwrap it and send along the original message.
+        // This happens when an MN is on a foreign network and sends to a CN.
+        if (addressedToRouter(ev.destination())) {
+            var original = ev.getOriginalPacket();
+            System.out.printf("%s received tunneled message %d from %s. Unpacking and forwarding to %s", this, ev.seq(), ev.source(), original.destination());
+            forwardMessage(original);
+        } else {
+            System.out.printf("%s received tunneled message %d. Do nothing and pass along to %s", this, ev.seq(), ev.destination());
+            forwardMessage(ev);
+        }
+    }
+
+    /**
      * Handle Router Solicitation messages, they essentially request a Router Advertisement to be sent.
      *
      * @param ev Solicitation message.
      */
-    protected void processRouterSolicitation(RouterSolicitation ev) {
-        for (int i = 0; i < _interfaces.length; ++i) {
-            var link = _interfaces[i];
-            if (link == null) continue;
+    protected void processRouterSolicitation(SimEnt src, RouterSolicitation ev) {
+        // Find which link received the solicitation, so we can send back the advertisement to the correct link.
+        for (var entry : _routingTable) {
+            if (entry.link() == src) {
+                var interfaceId = entry.getInterfaceId();
+                var interfaceNetwork = getInterfaceAddress(interfaceId);
 
-            // Generate a new network for something that connected.
-            long network = _basePrefix + i;
-
-            // Advertise the network prefix as the current interface id. We don't have an address for routers, so use
-            // the unspecified address for now.
-            var msg = new RouterAdvertisement(NetworkAddr.UNSPECIFIED, NetworkAddr.ALL_NODES_MULTICAST, 0, _name, network);
-            send(link, msg, 0);
+                // Advertise the network prefix as the current interface id. We don't have link-local addresses for routers,
+                // so use the unspecified address for now.
+                var msg = new RouterAdvertisement(NetworkAddr.UNSPECIFIED, NetworkAddr.ALL_NODES_MULTICAST, 0, _name, interfaceNetwork);
+                send(src, msg, 0);
+            }
         }
     }
 
@@ -244,11 +251,7 @@ public class Router extends SimEnt {
      * @param ev Router Advertisement message.
      */
     protected void processRouterAdvertisement(RouterAdvertisement ev) {
-        // To support the Fast Mobile IPv6 Handovers we store these advertisements, so we can respond to RtSolPr
-        // requests, where a Mobile Node can solicit advertisements from nearby routers.
-        String apName = ev.getName();
-        long apPrefix = ev.getNetworkPrefix();
-        _rtAdv.put(apName, apPrefix);
+        // Do nothing.
     }
 
     /**
@@ -257,14 +260,15 @@ public class Router extends SimEnt {
      * So here we have a node on our network that wants advertisements for a router on a neighboring network. So we send
      * back advertisements we have in our cache.
      *
-     * @param ev the Router Solicitation for Proxy Advertisement message.
+     * @param src SimEnt solicitation was received from.
+     * @param ev  the Router Solicitation for Proxy Advertisement message.
      */
-    protected void processRtSolPr(RtSolPr ev) {
-        String narName = ev.getNextAccessRouterName();
-        if (_rtAdv.containsKey(narName)) {
-            long networkPrefix = _rtAdv.get(narName);
-            var advertisement = new PrRtAdv(NetworkAddr.UNSPECIFIED, ev.source(), 0, narName, networkPrefix);
-            forwardMessage(advertisement);
+    protected void processRtSolPr(SimEnt src, RtSolPr ev) {
+        var interfaceName = getInterfaceName(ev.getName(), ev.getInterfaceId());
+        var entry = _proxyAdvertisements.get(interfaceName);
+        if (entry != null) {
+            var msg = new PrRtAdv(NetworkAddr.UNSPECIFIED, ev.source(), 0, entry.advertisement.getName(), entry.advertisement.getNetworkPrefix(), interfaceName);
+            send(src, msg, 0);
         }
     }
 
@@ -274,10 +278,25 @@ public class Router extends SimEnt {
      * For routers if we receive this, as these are probably multicasted, we basically do not propagate these over the
      * network.
      *
-     * @param ev the Proxy Router Advertisement message.
+     * @param src SimEnt advertisement was received from.
+     * @param ev  the Proxy Router Advertisement message.
      */
-    protected void processPrRtAdv(PrRtAdv ev) {
-        // Do nothing.
+    protected void processPrRtAdv(SimEnt src, PrRtAdv ev) {
+        // Find the interface address that received the message.
+        NetworkAddr interfaceAddress = null;
+        NetworkAddr from = null;
+        for (var entry : _routingTable) {
+            if (entry.link() == src) {
+                long interfaceNetwork = getInterfaceAddress(entry.getInterfaceId());
+                interfaceAddress = new NetworkAddr(interfaceNetwork, 0);
+                from = entry.getAddr();
+            }
+        }
+
+        if (interfaceAddress != null && from != null) {
+            var entry = new ProxyAdvertisementEntry(interfaceAddress, from, ev);
+            _proxyAdvertisements.put(ev.getInterfaceName(), entry);
+        }
     }
 
     /**
@@ -287,18 +306,16 @@ public class Router extends SimEnt {
      * @param ev the Binding Update message.
      */
     protected void processBindingUpdate(BindingUpdate ev) {
-        // Check if this binding update is intended for this router.
-        if (ev.destination().networkId() == _basePrefix) {
-            // This should be forwarded to the correct HA.
+        if (!addressedToRouter(ev.destination())) {
             forwardMessage(ev);
-        } else {
-            // This is intended for us, so add a care of address.
-            var homeAddress = ev.destination();
-            var careOfAddress = ev.source();
-
-            System.out.printf("== %s update binding from %s to %s%n", this, homeAddress, careOfAddress);
-            _bindingCache.put(homeAddress.networkId(), careOfAddress);
+            return;
         }
+
+        // Addressed to us, so update the care of address.
+        updateBindingCache(ev.destination(), ev.source());
+
+        var msg = new BindingAck(ev.destination(), ev.source(), 0);
+        forwardMessage(msg);
     }
 
     /**
@@ -307,17 +324,31 @@ public class Router extends SimEnt {
      * @param ev Binding Ack message.
      */
     protected void processBindingAck(BindingAck ev) {
-        // Do nothing.
+        if (!addressedToRouter(ev.destination())) {
+            forwardMessage(ev);
+        }
+        // Do nothing if addressed to us.
     }
 
     /**
      * Handle the Fast Binding Update messages. These are part of the Fast Mobile IPv6 Handovers, but the message is
      * basically the same as the regular Binding Update, the difference lies in how they are handled.
      *
-     * @param ev
+     * @param ev fast binding update message.
      */
     protected void processFastBindingUpdate(FastBindingUpdate ev) {
-        // todo
+        // Intercept the fast binding update, otherwise we cannot know the home agent address.
+        var entry = _proxyAdvertisements.get(ev.getInterfaceName());
+        if (entry != null) {
+            var handover = new FastHandover(ev.getSequence(), ev.destination(), ev.source(), ev.getNewCareOfAddress());
+            var identifier = ev.getSequence();
+            _handovers.put(identifier, handover);
+
+            // If this is addressed to the current router, initiate then handover procedure.
+            var advEntry = _proxyAdvertisements.get(ev.getInterfaceName());
+            var msg = new HandoverInitiate(advEntry.interfaceAddr, advEntry.from, 0, identifier);
+            forwardMessage(msg);
+        }
     }
 
     /**
@@ -327,7 +358,7 @@ public class Router extends SimEnt {
      * @param ev the Fast Binding Ack message.
      */
     protected void processFastBindingAck(FastBindingAck ev) {
-        // todo
+        // Do nothing, these should only be sent from the current router to the node.
     }
 
     /**
@@ -335,10 +366,17 @@ public class Router extends SimEnt {
      * <p>
      * These are sent from the current access router to the next access router to initiate a handover for the MN.
      *
-     * @param ev
+     * @param ev handover initiate message.
      */
     protected void processHandoverInitiate(HandoverInitiate ev) {
-        // todo
+        if (!addressedToRouter(ev.destination())) {
+            forwardMessage(ev);
+            return;
+        }
+
+        // We don't perform a lot of processing and always accept new nodes!
+        var msg = new HandoverAcknowledge(ev.destination(), ev.source(), 0, ev.getIdentifier());
+        forwardMessage(msg);
     }
 
     /**
@@ -349,7 +387,24 @@ public class Router extends SimEnt {
      * @param ev the Handover Acknowledge message
      */
     protected void processHandoverAck(HandoverAcknowledge ev) {
-        // todo
+        if (!addressedToRouter(ev.destination())) {
+            forwardMessage(ev);
+            return;
+        }
+
+        var handover = _handovers.get(ev.getIdentifier());
+        if (handover != null) {
+            _handovers.remove(ev.getIdentifier());
+
+            // Send binding update to HA.
+            var BU = new BindingUpdate(handover.nextCareOfAddress, handover.homeAgentAddress, 0);
+            forwardMessage(BU);
+
+            // Send fast binding ack to client.
+            var src = getSrcInterfaceAddress(handover.currentCareOfAddress);
+            var FBAck = new FastBindingAck(src, handover.currentCareOfAddress, 0);
+            forwardMessage(FBAck);
+        }
     }
 
     /**
@@ -373,6 +428,63 @@ public class Router extends SimEnt {
         }
     }
 
+
+    /**
+     * Updates the Home Agent home address to care of address cache.
+     *
+     * @param homeAddress   The node's home address.
+     * @param careOfAddress The node's new care of address.
+     */
+    private void updateBindingCache(NetworkAddr homeAddress, NetworkAddr careOfAddress) {
+        System.out.printf("== %s update binding from %s to %s%n", this, homeAddress, careOfAddress);
+        _bindingCache.put(homeAddress.networkId(), careOfAddress);
+    }
+
+    /**
+     * Checks if the address is one of the router's.
+     *
+     * @param addr address that may be the router's link address.
+     * @return true if this is the router's address.
+     */
+    private boolean addressedToRouter(NetworkAddr addr) {
+        for (int i = 0; i < _interfaces.length; ++i) {
+            var networkId = getInterfaceAddress(i);
+            if (networkId == addr.networkId()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns the interface networkId
+     *
+     * @param interfaceId interface to get address of.
+     * @return the interface's network id.
+     */
+    private long getInterfaceAddress(int interfaceId) {
+        return _baseAddress.networkId() + interfaceId;
+    }
+
+    /**
+     * Returns the name of a specific interface.
+     *
+     * @param interfaceId interface to the name of.
+     * @return name of interface.
+     */
+    private String getInterfaceName(String routerName, int interfaceId) {
+        return String.format("%s-%d", routerName, interfaceId);
+    }
+
+    private NetworkAddr getSrcInterfaceAddress(NetworkAddr dst) {
+        for (var entry : _routingTable) {
+            if (entry.getAddr().matches(dst.networkId())) {
+                return new NetworkAddr(getInterfaceAddress(entry.getInterfaceId()), 0);
+            }
+        }
+        return null;
+    }
+
     /**
      * Returns a string that identifies the router using its name.
      *
@@ -389,7 +501,7 @@ public class Router extends SimEnt {
     protected void debugRoutingTables() {
         System.out.printf("%s Routing table:%n", this);
         for (var entry : _routingTable) {
-            System.out.printf("  networkId: %h, bits: %d%n -> interface: %d%n", entry.getNetworkId(), entry.getNumBits(), entry.getInterfaceId());
+            System.out.printf("  interface %d -> %s%n", entry.getInterfaceId(), entry.getAddr());
         }
     }
 }
