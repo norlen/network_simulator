@@ -110,39 +110,40 @@ public class Node extends SimEnt {
             processMobilityHeader(msg);
         } else if (ev instanceof Message msg) {
             processMessage(src, msg);
-        } else if (ev instanceof Message msg) {
-            if (ev instanceof RouterAdvertisement event) {
-                processRouterAdvertisement(event);
-            } else if (ev instanceof BindingAck event) {
-                processBindingUpdateAck(event);
-            } else if (ev instanceof IPv6Tunneled event) {
-
-            } else {
-            }
         }
     }
 
+    /**
+     * Handle ICMPv6 messages.
+     *
+     * @param ev ICMPv6 Message.
+     */
     public void processICMPMessage(ICMPv6 ev) {
         if (ev instanceof PrRtAdv msg) {
-
+            processPrRtAdv(msg);
         } else if (ev instanceof RtSolPr msg) {
             // Should not get.
         } else if (ev instanceof RouterAdvertisement msg) {
-
+            processRouterAdvertisement(msg);
         } else if (ev instanceof RouterSolicitation msg) {
             // Should not get.
         }
     }
 
+    /**
+     * Process messages with a Mobility Header.
+     *
+     * @param ev message with mobility header.
+     */
     public void processMobilityHeader(MobilityHeader ev) {
         if (ev instanceof FastBindingUpdate msg) {
             // Should not get.
         } else if (ev instanceof FastBindingAck msg) {
-
+            processFastBindingAck(msg);
         } else if (ev instanceof BindingUpdate msg) {
             // Should not get.
         } else if (ev instanceof BindingAck msg) {
-
+            processBindingUpdateAck(msg);
         } else if (ev instanceof HandoverInitiate msg) {
             // Should not get.
         } else if (ev instanceof HandoverAcknowledge msg) {
@@ -150,6 +151,12 @@ public class Node extends SimEnt {
         }
     }
 
+    /**
+     * Process generic messages. This includes tunneled messages.
+     *
+     * @param src entity we got message from.
+     * @param ev  generic message.
+     */
     public void processMessage(SimEnt src, Message ev) {
         if (ev instanceof IPv6Tunneled msg) {
             System.out.printf("-- %s receives tunneled message with seq: %d at time: %f%n", this, msg.seq(), SimEngine.getTime());
@@ -164,6 +171,11 @@ public class Node extends SimEnt {
         }
     }
 
+    /**
+     * Handle the connected event. This is received after the link has established a connection to a network.
+     *
+     * @param ev connected event.
+     */
     protected void processConnected(Connected ev) {
         System.out.printf("-- %s connected to network at time: %f%n", this, SimEngine.getTime());
 
@@ -176,6 +188,11 @@ public class Node extends SimEnt {
         }
     }
 
+    /**
+     * Handle the disconnected event. This is received after the link has disconnected from a router.
+     *
+     * @param ev the disconnected event.
+     */
     protected void processDisconnected(Disconnected ev) {
     }
 
