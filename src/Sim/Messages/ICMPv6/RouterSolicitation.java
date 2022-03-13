@@ -20,4 +20,9 @@ public class RouterSolicitation extends ICMPv6 {
     public RouterSolicitation(NetworkAddr from, NetworkAddr to, int seq) {
         super(from, to, seq);
     }
+
+    @Override
+    public String toString() {
+        return String.format("RouterSolicitation (ICMPv6), src=%s, dst=%s", source(), destination());
+    }
 }

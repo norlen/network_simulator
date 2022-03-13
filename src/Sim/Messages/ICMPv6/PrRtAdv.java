@@ -36,4 +36,9 @@ public class PrRtAdv extends RouterAdvertisement {
     public String getInterfaceName() {
         return _interfaceName;
     }
+
+    @Override
+    public String toString() {
+        return String.format("PrRtAdv (ICMPv6), src=%s, dst=%s", source(), destination());
+    }
 }

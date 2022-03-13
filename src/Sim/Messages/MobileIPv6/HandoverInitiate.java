@@ -26,4 +26,9 @@ public class HandoverInitiate extends MobilityHeader {
     public int getIdentifier() {
         return _identifier;
     }
+
+    @Override
+    public String toString() {
+        return String.format("HandoverInitiate (MH), src=%s, dst=%s", source(), destination());
+    }
 }

@@ -49,4 +49,9 @@ public class RtSolPr extends RouterSolicitation {
     public int getInterfaceId() {
         return _interfaceId;
     }
+
+    @Override
+    public String toString() {
+        return String.format("RtSolPr (ICMPv6), src=%s, dst=%s", source(), destination());
+    }
 }

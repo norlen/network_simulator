@@ -11,4 +11,9 @@ public class FastBindingAck extends BindingAck {
     public FastBindingAck(NetworkAddr from, NetworkAddr to, int seq) {
         super(from, to, seq);
     }
+
+    @Override
+    public String toString() {
+        return String.format("FastBindingAck (MH), src=%s, dst=%s", source(), destination());
+    }
 }

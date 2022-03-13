@@ -5,6 +5,8 @@ package Sim;
 // compared to the network part of the IP address like 132.17.9.0). Then _nodeId represent
 // the host part.
 
+import java.util.Objects;
+
 /**
  * IPv6 address.
  */
@@ -52,6 +54,19 @@ public class NetworkAddr {
     @Override
     public String toString() {
         return String.format("%s:%s/%d", getHex(_networkId), getHex(_nodeId), _prefix);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        NetworkAddr that = (NetworkAddr) o;
+        return _networkId == that._networkId && _nodeId == that._nodeId && _prefix == that._prefix;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(_networkId, _nodeId, _prefix);
     }
 
     private String getHex(long part) {

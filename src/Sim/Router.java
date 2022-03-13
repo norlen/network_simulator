@@ -13,17 +13,6 @@ import java.util.HashMap;
  * todo
  */
 public class Router extends SimEnt {
-    private record ProxyAdvertisementEntry(NetworkAddr interfaceAddr,
-                                           NetworkAddr from,
-                                           PrRtAdv advertisement) {
-    }
-
-    private record FastHandover(int sequence,
-                                NetworkAddr homeAgentAddress,
-                                NetworkAddr currentCareOfAddress,
-                                NetworkAddr nextCareOfAddress) {
-    }
-
     // The router's name.
     private final String _name;
 
@@ -37,14 +26,29 @@ public class Router extends SimEnt {
     private final NetworkAddr _baseAddress;
 
     // Cache for home addresses to current care of addresses.
-    private final HashMap<Long, NetworkAddr> _bindingCache = new HashMap<>();
+    private final HashMap<NetworkAddr, NetworkAddr> _bindingCache = new HashMap<>();
 
     // Hard-coded advertisements from neighbor routers, used for proxy advertisements.
     //private final HashMap<String, PrRtAdv> _proxyAdvertisements = new HashMap<>();
 
     // So to make this work we send proxy advertisements to other routers, so they can store those for routers that are
     // one hop away.
+
+    private int _timeBetweenAdvertisements;
+
+    private record ProxyAdvertisementEntry(NetworkAddr interfaceAddr,
+                                           NetworkAddr from,
+                                           PrRtAdv advertisement) {
+    }
+
     private final HashMap<String, ProxyAdvertisementEntry> _proxyAdvertisements = new HashMap<>();
+
+    private record FastHandover(int sequence,
+                                NetworkAddr homeAgentAddress,
+                                NetworkAddr homeAddress,
+                                NetworkAddr currentCareOfAddress,
+                                NetworkAddr nextCareOfAddress) {
+    }
 
     private final HashMap<Integer, FastHandover> _handovers = new HashMap<>();
 
@@ -59,6 +63,17 @@ public class Router extends SimEnt {
         _name = name;
         _interfaces = new SimEnt[interfaces];
         _baseAddress = baseAddr;
+    }
+
+    /**
+     * Make the router send out proxy advertisements on a delay, and not just when it gets a solicitation. Set delay to
+     * zero to only send once.
+     *
+     * @param delay time between advertisements.
+     */
+    public void startSendingProxyAdvertisements(int delay) {
+        _timeBetweenAdvertisements = delay;
+        send(this, new TimerEvent(), 0);
     }
 
     // This method connects links to the router and also informs the
@@ -116,22 +131,22 @@ public class Router extends SimEnt {
     @Override
     public void recv(SimEnt src, Event ev) {
         if (ev instanceof EnterNetwork event) {
-            System.out.printf("== %s handle EnterNetwork%n", this);
             processEnterNetwork(src, event);
         } else if (ev instanceof LeaveNetwork event) {
-            System.out.printf("== %s handles LeaveNetwork%n", this);
             processLeaveNetwork(src, event);
+        } else if (ev instanceof TimerEvent) {
+            System.out.printf("[%d] %s: send Proxy Advertisement to other routers%n", (int) SimEngine.getTime(), this, ev);
+            sendProxyAdvertisements();
+            if (_timeBetweenAdvertisements != 0) {
+                send(this, new TimerEvent(), _timeBetweenAdvertisements);
+            }
         } else if (ev instanceof ICMPv6 msg) {
-            System.out.printf("%s handles ICMP message with seq: %d from addr: %s%n", this, msg.seq(), msg.source());
             processICMPMessage(src, msg);
         } else if (ev instanceof MobilityHeader msg) {
-            System.out.printf("%s handles mobility message with seq: %d from addr: %s%n", this, msg.seq(), msg.source());
             processMobilityMessage(src, msg);
         } else if (ev instanceof IPv6Tunneled msg) {
-            System.out.printf("%s handles tunneled message with seq: %d from addr: %s%n", this, msg.seq(), msg.source());
             processTunneledMessage(msg);
         } else if (ev instanceof Message msg) {
-            System.out.printf("%s handles message with seq: %d from addr: %s%n", this, msg.seq(), msg.source());
             // For regular data messages, just forward those.
             forwardMessage(msg);
         }
@@ -191,7 +206,8 @@ public class Router extends SimEnt {
             return;
         }
 
-        var addr = new NetworkAddr(getInterfaceAddress(interfaceId), 64);
+        var addr = new NetworkAddr(getInterfaceAddress(interfaceId), 0, 64);
+        System.out.printf("[%d] %s: enter network [interfaceId=%d, interfaceAddr=%s]%n", (int) SimEngine.getTime(), this, interfaceId, addr);
         connectInterface(interfaceId, addr, (Link) src);
     }
 
@@ -202,6 +218,7 @@ public class Router extends SimEnt {
      * @param ev  leave network event.
      */
     protected void processLeaveNetwork(SimEnt src, LeaveNetwork ev) {
+        System.out.printf("[%d] %s: leave network [src=%s]%n", (int) SimEngine.getTime(), this, ev.getSourceAddress());
         disconnectInterface(ev.getSourceAddress().networkId());
     }
 
@@ -216,10 +233,10 @@ public class Router extends SimEnt {
         // This happens when an MN is on a foreign network and sends to a CN.
         if (addressedToRouter(ev.destination())) {
             var original = ev.getOriginalPacket();
-            System.out.printf("%s received tunneled message %d from %s. Unpacking and forwarding to %s", this, ev.seq(), ev.source(), original.destination());
+            System.out.printf("[%d] %s: recv [%s]. Unpack and send [%s]%n", (int) SimEngine.getTime(), this, ev, original);
             forwardMessage(original);
         } else {
-            System.out.printf("%s received tunneled message %d. Do nothing and pass along to %s", this, ev.seq(), ev.destination());
+            System.out.printf("[%d] %s: recv [%s]. Forwarding%n", (int) SimEngine.getTime(), this, ev);
             forwardMessage(ev);
         }
     }
@@ -230,6 +247,8 @@ public class Router extends SimEnt {
      * @param ev Solicitation message.
      */
     protected void processRouterSolicitation(SimEnt src, RouterSolicitation ev) {
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
+
         // Find which link received the solicitation, so we can send back the advertisement to the correct link.
         for (var entry : _routingTable) {
             if (entry.link() == src) {
@@ -251,6 +270,7 @@ public class Router extends SimEnt {
      * @param ev Router Advertisement message.
      */
     protected void processRouterAdvertisement(RouterAdvertisement ev) {
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
         // Do nothing.
     }
 
@@ -264,6 +284,9 @@ public class Router extends SimEnt {
      * @param ev  the Router Solicitation for Proxy Advertisement message.
      */
     protected void processRtSolPr(SimEnt src, RtSolPr ev) {
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
+        debugProxyAdvertisements();
+
         var interfaceName = getInterfaceName(ev.getName(), ev.getInterfaceId());
         var entry = _proxyAdvertisements.get(interfaceName);
         if (entry != null) {
@@ -282,6 +305,8 @@ public class Router extends SimEnt {
      * @param ev  the Proxy Router Advertisement message.
      */
     protected void processPrRtAdv(SimEnt src, PrRtAdv ev) {
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
+
         // Find the interface address that received the message.
         NetworkAddr interfaceAddress = null;
         NetworkAddr from = null;
@@ -310,6 +335,7 @@ public class Router extends SimEnt {
             forwardMessage(ev);
             return;
         }
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
 
         // Addressed to us, so update the care of address.
         updateBindingCache(ev.destination(), ev.source());
@@ -327,6 +353,7 @@ public class Router extends SimEnt {
         if (!addressedToRouter(ev.destination())) {
             forwardMessage(ev);
         }
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
         // Do nothing if addressed to us.
     }
 
@@ -337,10 +364,13 @@ public class Router extends SimEnt {
      * @param ev fast binding update message.
      */
     protected void processFastBindingUpdate(FastBindingUpdate ev) {
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
+
         // Intercept the fast binding update, otherwise we cannot know the home agent address.
         var entry = _proxyAdvertisements.get(ev.getInterfaceName());
         if (entry != null) {
-            var handover = new FastHandover(ev.getSequence(), ev.destination(), ev.source(), ev.getNewCareOfAddress());
+            var homeAgentAddress = new NetworkAddr(ev.destination().networkId(), 0);
+            var handover = new FastHandover(ev.getSequence(), homeAgentAddress, ev.getHomeAddress(), ev.source(), ev.getNewCareOfAddress());
             var identifier = ev.getSequence();
             _handovers.put(identifier, handover);
 
@@ -358,6 +388,7 @@ public class Router extends SimEnt {
      * @param ev the Fast Binding Ack message.
      */
     protected void processFastBindingAck(FastBindingAck ev) {
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
         // Do nothing, these should only be sent from the current router to the node.
     }
 
@@ -373,6 +404,7 @@ public class Router extends SimEnt {
             forwardMessage(ev);
             return;
         }
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
 
         // We don't perform a lot of processing and always accept new nodes!
         var msg = new HandoverAcknowledge(ev.destination(), ev.source(), 0, ev.getIdentifier());
@@ -391,19 +423,28 @@ public class Router extends SimEnt {
             forwardMessage(ev);
             return;
         }
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
 
         var handover = _handovers.get(ev.getIdentifier());
         if (handover != null) {
             _handovers.remove(ev.getIdentifier());
 
-            // Send binding update to HA.
-            var BU = new BindingUpdate(handover.nextCareOfAddress, handover.homeAgentAddress, 0);
-            forwardMessage(BU);
+            // Check if we are the HA for this MN.
+            if (addressedToRouter(handover.homeAgentAddress)) {
+                updateBindingCache(handover.homeAddress, handover.nextCareOfAddress);
+            } else {
+                // Send binding update to HA.
+                var BU = new BindingUpdate(handover.nextCareOfAddress, handover.homeAgentAddress, 0, 0, handover.homeAddress);
+                System.out.printf("*********** %s: send [%s]%n", this, BU);
+                forwardMessage(BU);
+            }
 
-            // Send fast binding ack to client.
+            // Send fast binding ack to client. As we just updated the binding to the new care of address. We skip
+            // the tunneling check.
+            var interfaceLink = getInterface(handover.currentCareOfAddress.networkId());
             var src = getSrcInterfaceAddress(handover.currentCareOfAddress);
             var FBAck = new FastBindingAck(src, handover.currentCareOfAddress, 0);
-            forwardMessage(FBAck);
+            send(interfaceLink, FBAck, 0);
         }
     }
 
@@ -413,9 +454,9 @@ public class Router extends SimEnt {
      * @param ev message to forward.
      */
     protected void forwardMessage(Message ev) {
-        if (_bindingCache.containsKey(ev.destination().networkId())) {
-            var coa = _bindingCache.get(ev.destination().networkId());
-            System.out.printf("== %s tunnels message from (%s -> %s) to (%s -> %s)%n", this, ev.source(), ev.destination(), ev.destination(), coa);
+        if (_bindingCache.containsKey(ev.destination())) {
+            var coa = _bindingCache.get(ev.destination());
+            System.out.printf("[%d] %s: tunnel [%s] to dst=%s%n", (int) SimEngine.getTime(), this, ev, ev.destination(), coa);
             ev = new IPv6Tunneled(ev.destination(), coa, 0, ev);
         }
 
@@ -423,11 +464,29 @@ public class Router extends SimEnt {
         if (sendNext == null) {
             System.out.printf("ERR: %s wants to send to %s but interface is unbound%n", this, ev.destination());
         } else {
-            System.out.printf("%s sends to %s%n", this, ev.destination());
+            System.out.printf("[%d] %s: forward [%s]%n", (int) SimEngine.getTime(), this, ev);
             send(sendNext, ev, 0);
         }
     }
 
+    /**
+     * Send out proxy advertisements to ...
+     */
+    protected void sendProxyAdvertisements() {
+        System.out.printf("[%d] %s: send Proxy Advertisements to all routers%n", (int) SimEngine.getTime(), this);
+        for (int i = 0; i < _interfaces.length; ++i) {
+            var interfaceName = getInterfaceName(_name, i);
+            var interfaceNetwork = getInterfaceAddress(i);
+
+            for (int j = 0; j < _interfaces.length; ++j) {
+                var link = _interfaces[j];
+                if (link == null || i == j) continue;
+
+                // Send a proxy advertisement for one of the networks, to all other routers on the other links.
+                send(link, new PrRtAdv(NetworkAddr.UNSPECIFIED, NetworkAddr.ALL_ROUTER_MULTICAST, 0, _name, interfaceNetwork, interfaceName), 0);
+            }
+        }
+    }
 
     /**
      * Updates the Home Agent home address to care of address cache.
@@ -436,8 +495,8 @@ public class Router extends SimEnt {
      * @param careOfAddress The node's new care of address.
      */
     private void updateBindingCache(NetworkAddr homeAddress, NetworkAddr careOfAddress) {
-        System.out.printf("== %s update binding from %s to %s%n", this, homeAddress, careOfAddress);
-        _bindingCache.put(homeAddress.networkId(), careOfAddress);
+        System.out.printf("[%d] %s: update binding cache [home=%s, coa=%s]%n", (int) SimEngine.getTime(), this, homeAddress, careOfAddress);
+        _bindingCache.put(homeAddress, careOfAddress);
     }
 
     /**
@@ -449,7 +508,7 @@ public class Router extends SimEnt {
     private boolean addressedToRouter(NetworkAddr addr) {
         for (int i = 0; i < _interfaces.length; ++i) {
             var networkId = getInterfaceAddress(i);
-            if (networkId == addr.networkId()) {
+            if (networkId == addr.networkId() && addr.nodeId() == 0) {
                 return true;
             }
         }
@@ -476,6 +535,12 @@ public class Router extends SimEnt {
         return String.format("%s-%d", routerName, interfaceId);
     }
 
+    /**
+     * Returns the source address of the outgoing link. So we can get messages sent back to the router.
+     *
+     * @param dst destination address, so we can figure out which link.
+     * @return source address of link.
+     */
     private NetworkAddr getSrcInterfaceAddress(NetworkAddr dst) {
         for (var entry : _routingTable) {
             if (entry.getAddr().matches(dst.networkId())) {
@@ -502,6 +567,28 @@ public class Router extends SimEnt {
         System.out.printf("%s Routing table:%n", this);
         for (var entry : _routingTable) {
             System.out.printf("  interface %d -> %s%n", entry.getInterfaceId(), entry.getAddr());
+        }
+    }
+
+    /**
+     * Pretty prints the proxy advertisement cache to standard out.
+     */
+    protected void debugProxyAdvertisements() {
+        System.out.printf("%s Proxy Advertisement cache:%n", this);
+        for (var entry : _proxyAdvertisements.entrySet()) {
+            var interfaceName = entry.getKey();
+            var adv = entry.getValue();
+            System.out.printf("  %s -> %s%n", interfaceName, new NetworkAddr(adv.advertisement.getNetworkPrefix(), 0));
+        }
+    }
+
+    /**
+     * Pretty prints the binding cache to standard out.
+     */
+    protected void debugBindingCache() {
+        System.out.printf("%s Binding Cache:%n", this);
+        for (var entry : _bindingCache.entrySet()) {
+            System.out.printf("  %s -> %s%n", entry.getKey(), entry.getValue());
         }
     }
 }

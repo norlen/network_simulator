@@ -2,6 +2,7 @@ package Sim;
 
 // An example of how to build a topology and starting the simulation engine
 
+import Sim.Events.StartHandover;
 import Sim.Traffic.*;
 
 import java.util.Date;
@@ -76,6 +77,12 @@ public class Run {
         Link routerToRouter = new Link();
         routeNode.connectInterface(1, FNAddress, routerToRouter);
         routeNode2.connectInterface(1, HNAddress, routerToRouter);
+
+        var handover = new StartHandover(routeNode2, "R2", 3);
+        SimEngine.instance().register(host1, host1, handover, 200);
+
+        routeNode.startSendingProxyAdvertisements(0);
+        routeNode2.startSendingProxyAdvertisements(0);
 
         //SimEngine.instance().register(link1, routeNode, new EnterNetwork(host1, 0), 0);
         //SimEngine.instance().register(link2, routeNode2, new EnterNetwork(host2, 0), 0);

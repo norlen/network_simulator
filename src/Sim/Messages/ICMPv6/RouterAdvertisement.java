@@ -50,4 +50,9 @@ public class RouterAdvertisement extends ICMPv6 {
     public String getName() {
         return _name;
     }
+
+    @Override
+    public String toString() {
+        return String.format("RouterAdvertisement (ICMPv6), src=%s, dst=%s", source(), destination());
+    }
 }

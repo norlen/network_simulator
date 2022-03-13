@@ -159,13 +159,13 @@ public class Node extends SimEnt {
      */
     public void processMessage(SimEnt src, Message ev) {
         if (ev instanceof IPv6Tunneled msg) {
-            System.out.printf("-- %s receives tunneled message with seq: %d at time: %f%n", this, msg.seq(), SimEngine.getTime());
+            System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
             recv(src, msg.getOriginalPacket());
             return;
         }
 
         // Generic message, no specific handling.
-        System.out.printf("%s receives message with seq: %d at time: %f%n", this, ev.seq(), SimEngine.getTime());
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
         if (_sink != null) {
             _sink.process(src, ev);
         }
@@ -177,7 +177,7 @@ public class Node extends SimEnt {
      * @param ev connected event.
      */
     protected void processConnected(Connected ev) {
-        System.out.printf("-- %s connected to network at time: %f%n", this, SimEngine.getTime());
+        System.out.printf("[%d] %s: connected to new network%n", (int) SimEngine.getTime(), this);
 
         // Only send if we have not configured our IPs yet, we might have done this if we performed a fast handover.
         if (_homeAddress == null || _careOfAddress == null) {
@@ -194,30 +194,32 @@ public class Node extends SimEnt {
      * @param ev the disconnected event.
      */
     protected void processDisconnected(Disconnected ev) {
+        System.out.printf("[%d] %s: disconnected from current network%n", (int) SimEngine.getTime(), this, ev);
     }
 
     protected void processTimerEvent(TimerEvent event) {
         if (_trafficGenerator != null && _trafficGenerator.shouldSend()) {
-            System.out.printf("%s sent message to %s with seq: %d at time: %f%n", this, _dst, _seq, SimEngine.getTime());
-
             if (_trafficGenerator.getMessagesSent() == 5 && _name == "MN") {
                 // Leave the current network and join the new network.
-                System.out.printf("-- %s leaving current network and tries to join new network%n", this);
-                sendMessage(new LeaveNetwork(getCurrentAddress()));
-                sendMessage(new EnterNetwork(this, null, 3));
-                _ipConfigurationCompleted = false;
-                _careOfAddress = null;
+//                System.out.printf("-- %s leaving current network and tries to join new network%n", this);
+//                sendMessage(new LeaveNetwork(getCurrentAddress()));
+//                sendMessage(new EnterNetwork(this, null, 3));
+//                _ipConfigurationCompleted = false;
+//                _careOfAddress = null;
             }
 
             // Send message.
             var msg = new Message(_homeAddress, _dst, _seq++);
             if (_careOfAddress != null) {
-                System.out.printf("%s has CoA, tunneling message with seq: %d to %s%n", this, msg.seq(), _homeAddress);
+                //System.out.printf("%s has CoA, tunneling message with seq: %d to %s%n", this, msg.seq(), _homeAddress);
                 // If we have a care of address, tunnel the message to the home agent.
-                msg = new IPv6Tunneled(_careOfAddress, _homeAddress, 0, msg);
+                var haAddress = new NetworkAddr(_homeAddress.networkId(), 0);
+                msg = new IPv6Tunneled(_careOfAddress, haAddress, 0, msg);
             }
             sendMessage(msg);
             _trafficGenerator.addPacketSent();
+
+            System.out.printf("[%d] %s: send [%s]%n", (int) SimEngine.getTime(), this, msg);
 
             // Schedule next message.
             double nextSendTime = _trafficGenerator.getNextSendTime();
@@ -226,6 +228,8 @@ public class Node extends SimEnt {
     }
 
     protected void processStartHandover(StartHandover ev) {
+        System.out.printf("[%d] %s: recv [StartHandover event]%n", (int) SimEngine.getTime(), this);
+
         // We want to switch to a new network soon. So start the handover process.
         var msg = new RtSolPr(getCurrentAddress(), NetworkAddr.ALL_ROUTER_MULTICAST, _seq++, ev.getNextAccessRouter(), ev.getNextInterfaceId());
         sendMessage(msg);
@@ -234,7 +238,7 @@ public class Node extends SimEnt {
     }
 
     protected void processRouterAdvertisement(RouterAdvertisement ev) {
-        System.out.printf("-- %s receives RouterAdvertisement with seq: %d at time %f%n", this, ev.seq(), SimEngine.getTime());
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
 
         if (_ipConfigurationCompleted) {
             // This isn't exactly correct, but we don't care about advertisement right now if we have already performed
@@ -251,14 +255,14 @@ public class Node extends SimEnt {
 
             // Check if we re-entered the home network.
             if (_homeAddress.networkId() == prefix) {
-                msg = new BindingUpdate(_homeAddress, _homeAgent, _seq++);
+                msg = new BindingUpdate(_homeAddress, _homeAgent, _seq++, 0, _homeAddress);
             } else {
                 _careOfAddress = new NetworkAddr(prefix, _linkLocal.nodeId());
-                msg = new BindingUpdate(_careOfAddress, _homeAgent, _seq++);
+                msg = new BindingUpdate(_careOfAddress, _homeAgent, _seq++, 0, _homeAddress);
             }
             sendMessage(msg);
         }
-        System.out.printf("-- %s completed IPv6 stateless auto configuration%n", this, _homeAddress, _careOfAddress);
+        System.out.printf("%s completed IPv6 stateless auto configuration%n", this, _homeAddress, _careOfAddress);
 
         // IP configuration done. Here we should do neighbor discovery to see if this address exists on the network.
         // which is left for future work.
@@ -266,25 +270,33 @@ public class Node extends SimEnt {
     }
 
     protected void processPrRtAdv(PrRtAdv ev) {
+        if (ev.destination() == NetworkAddr.ALL_ROUTER_MULTICAST) {
+            // Skip advertisements intended for routers.
+            return;
+        }
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
+
         var nextCareOfAddress = new NetworkAddr(ev.getNetworkPrefix(), _linkLocal.nodeId());
-        var msg = new FastBindingUpdate(getCurrentAddress(), _homeAddress, _seq++, ev.getInterfaceName(), nextCareOfAddress);
+        var msg = new FastBindingUpdate(getCurrentAddress(), _homeAddress, _seq++, 0, _homeAddress, ev.getInterfaceName(), nextCareOfAddress);
         sendMessage(msg);
 
         _handover = new Handover(nextCareOfAddress, _handover.router, _handover.interfaceId);
     }
 
     protected void processBindingUpdateAck(BindingAck ev) {
-        System.out.printf("-- %s receives BindingAck with seq: %d at time %f%n", this, ev.seq(), SimEngine.getTime());
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
     }
 
     protected void processFastBindingAck(FastBindingAck ev) {
         // When we this ack, the fast handover process is completed, and we should disconnect from the current network,
         // and join the new network.
-        System.out.printf("-- %s receives FastBindingAck with seq: %d at time %f%n", this, ev.seq(), SimEngine.getTime());
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
 
         var LeaveEvent = new LeaveNetwork(getCurrentAddress());
         var JoinEvent = new EnterNetwork(this, _handover.router, _handover.interfaceId);
         _careOfAddress = _handover.newCareOfAddress;
+
+        System.out.printf("%s fast handover setup complete%n", this);
 
         sendMessage(LeaveEvent);
         sendMessage(JoinEvent);
@@ -304,6 +316,6 @@ public class Node extends SimEnt {
 
     @Override
     public String toString() {
-        return String.format("Node %s ll=[%s] ha=[%s] coa=[%s]", _name, _linkLocal, _homeAddress, _careOfAddress);
+        return String.format("Node %s [ha=%s, coa=%s]", _name, _homeAddress, _careOfAddress);
     }
 }

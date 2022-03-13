@@ -23,8 +23,8 @@ public class FastBindingUpdate extends BindingUpdate {
      * @param seq              sequence number.
      * @param newCareOfAddress the new care of address in the next router network.
      */
-    public FastBindingUpdate(NetworkAddr from, NetworkAddr to, int seq, String interfaceName, NetworkAddr newCareOfAddress) {
-        super(from, to, seq);
+    public FastBindingUpdate(NetworkAddr from, NetworkAddr to, int seq, int sequence, NetworkAddr homeAddress, String interfaceName, NetworkAddr newCareOfAddress) {
+        super(from, to, seq, sequence, homeAddress);
         _interfaceName = interfaceName;
         _newCareOfAddress = newCareOfAddress;
     }
@@ -40,5 +40,10 @@ public class FastBindingUpdate extends BindingUpdate {
 
     public String getInterfaceName() {
         return _interfaceName;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("FastBindingUpdate (MH), src=%s, dst=%s", source(), destination());
     }
 }

@@ -29,4 +29,9 @@ public class BindingAck extends MobilityHeader {
     public int getSequence() {
         return _sequence;
     }
+
+    @Override
+    public String toString() {
+        return String.format("BindingAck (MH), src=%s, dst=%s", source(), destination());
+    }
 }

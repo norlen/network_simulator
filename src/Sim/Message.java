@@ -32,4 +32,9 @@ public class Message implements Event {
 
     public void entering(SimEnt locale) {
     }
+
+    @Override
+    public String toString() {
+        return String.format("Message, src=%s, dst=%s", source(), destination());
+    }
 }

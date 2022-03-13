@@ -26,4 +26,9 @@ public class HandoverAcknowledge extends MobilityHeader {
     public int getIdentifier() {
         return _identifier;
     }
+
+    @Override
+    public String toString() {
+        return String.format("HandoverAck (MH), src=%s, dst=%s", source(), destination());
+    }
 }

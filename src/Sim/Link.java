@@ -63,7 +63,7 @@ public class Link extends SimEnt {
             return;
         }
 
-        System.out.println("Link recv msg, passes it through");
+        //System.out.println("Link recv msg, passes it through");
         if (src == _connectorA) {
             send(_connectorB, ev, _now);
         } else {

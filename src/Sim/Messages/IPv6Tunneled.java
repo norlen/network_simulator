@@ -14,4 +14,9 @@ public class IPv6Tunneled extends IPv6 {
     public Message getOriginalPacket() {
         return _originalPacket;
     }
+
+    @Override
+    public String toString() {
+        return String.format("IPv6Tunneled, src=%s, dst=%s", source(), destination());
+    }
 }
