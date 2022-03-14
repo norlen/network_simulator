@@ -12,4 +12,9 @@ public class Connected implements Event {
     public void entering(SimEnt locale) {
 
     }
+
+    @Override
+    public String toString() {
+        return String.format("Connected event");
+    }
 }

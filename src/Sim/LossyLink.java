@@ -68,7 +68,7 @@ public class LossyLink extends Link {
             }
 
             double delay = getDelay();
-            System.out.println("-- Link recv msg, delay: " + delay);
+            //System.out.println("-- Link recv msg, delay: " + delay);
             _now = (int) delay;
         }
         super.recv(src, ev);

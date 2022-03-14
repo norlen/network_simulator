@@ -52,6 +52,9 @@ public class Router extends SimEnt {
 
     private final HashMap<Integer, FastHandover> _handovers = new HashMap<>();
 
+    // Count of how many packets we dropped, because no interface could be found for the address.
+    private int _pktsDroppedNoInterface = 0;
+
     /**
      * Instantiate a new router.
      *
@@ -104,7 +107,11 @@ public class Router extends SimEnt {
             if (entry.getAddr().networkId() != networkId) {
                 keep.add(entry);
             } else {
-                _interfaces[entry.getInterfaceId()] = null;
+                var link = (Link) _interfaces[entry.getInterfaceId()];
+                if (link != null) {
+                    _interfaces[entry.getInterfaceId()] = null;
+                    link.setConnector(null);
+                }
             }
         }
         _routingTable = keep;
@@ -135,7 +142,7 @@ public class Router extends SimEnt {
         } else if (ev instanceof LeaveNetwork event) {
             processLeaveNetwork(src, event);
         } else if (ev instanceof TimerEvent) {
-            System.out.printf("[%d] %s: send Proxy Advertisement to other routers%n", (int) SimEngine.getTime(), this, ev);
+            System.out.printf("[%d] %s: send Proxy Advertisement to other routers%n", (int) SimEngine.getTime(), this);
             sendProxyAdvertisements();
             if (_timeBetweenAdvertisements != 0) {
                 send(this, new TimerEvent(), _timeBetweenAdvertisements);
@@ -199,6 +206,8 @@ public class Router extends SimEnt {
      * @param ev  the join event.
      */
     protected void processEnterNetwork(SimEnt src, EnterNetwork ev) {
+        System.out.printf("[%d] %s: [%s]%n", (int) SimEngine.getTime(), this, ev);
+
         var interfaceId = ev.getInterfaceId();
         if (_interfaces[interfaceId] != null) {
             // Cannot bind to an interface that's already in use.
@@ -207,7 +216,6 @@ public class Router extends SimEnt {
         }
 
         var addr = new NetworkAddr(getInterfaceAddress(interfaceId), 0, 64);
-        System.out.printf("[%d] %s: enter network [interfaceId=%d, interfaceAddr=%s]%n", (int) SimEngine.getTime(), this, interfaceId, addr);
         connectInterface(interfaceId, addr, (Link) src);
     }
 
@@ -218,7 +226,7 @@ public class Router extends SimEnt {
      * @param ev  leave network event.
      */
     protected void processLeaveNetwork(SimEnt src, LeaveNetwork ev) {
-        System.out.printf("[%d] %s: leave network [src=%s]%n", (int) SimEngine.getTime(), this, ev.getSourceAddress());
+        System.out.printf("[%d] %s: [%s] [src=%s]%n", (int) SimEngine.getTime(), this, ev, ev.getSourceAddress());
         disconnectInterface(ev.getSourceAddress().networkId());
     }
 
@@ -338,7 +346,7 @@ public class Router extends SimEnt {
         System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
 
         // Addressed to us, so update the care of address.
-        updateBindingCache(ev.destination(), ev.source());
+        updateBindingCache(ev.getHomeAddress(), ev.source());
 
         var msg = new BindingAck(ev.destination(), ev.source(), 0);
         forwardMessage(msg);
@@ -456,12 +464,13 @@ public class Router extends SimEnt {
     protected void forwardMessage(Message ev) {
         if (_bindingCache.containsKey(ev.destination())) {
             var coa = _bindingCache.get(ev.destination());
-            System.out.printf("[%d] %s: tunnel [%s] to dst=%s%n", (int) SimEngine.getTime(), this, ev, ev.destination(), coa);
+            System.out.printf("[%d] %s: tunnel [%s] to dst=%s%n", (int) SimEngine.getTime(), this, ev, coa);
             ev = new IPv6Tunneled(ev.destination(), coa, 0, ev);
         }
 
         SimEnt sendNext = getInterface(ev.destination().networkId());
         if (sendNext == null) {
+            _pktsDroppedNoInterface += 1;
             System.out.printf("ERR: %s wants to send to %s but interface is unbound%n", this, ev.destination());
         } else {
             System.out.printf("[%d] %s: forward [%s]%n", (int) SimEngine.getTime(), this, ev);
@@ -561,10 +570,22 @@ public class Router extends SimEnt {
     }
 
     /**
+     * Prints statistics and configuration of router.
+     */
+    public void onSimulationComplete() {
+        System.out.printf("%s%n", this);
+        System.out.printf("- Packets dropped (no interface bound): %d%n", _pktsDroppedNoInterface);
+        debugRoutingTables();
+        debugBindingCache();
+        debugProxyAdvertisements();
+    }
+
+    /**
      * Pretty prints the routing tables to standard out.
      */
     protected void debugRoutingTables() {
-        System.out.printf("%s Routing table:%n", this);
+        //System.out.printf("%s Routing table:%n", this);
+        System.out.printf("- Routing table:%n");
         for (var entry : _routingTable) {
             System.out.printf("  interface %d -> %s%n", entry.getInterfaceId(), entry.getAddr());
         }
@@ -574,7 +595,8 @@ public class Router extends SimEnt {
      * Pretty prints the proxy advertisement cache to standard out.
      */
     protected void debugProxyAdvertisements() {
-        System.out.printf("%s Proxy Advertisement cache:%n", this);
+        //System.out.printf("%s Proxy Advertisement cache:%n", this);
+        System.out.printf("- Proxy Advertisement cache:%n");
         for (var entry : _proxyAdvertisements.entrySet()) {
             var interfaceName = entry.getKey();
             var adv = entry.getValue();
@@ -586,7 +608,8 @@ public class Router extends SimEnt {
      * Pretty prints the binding cache to standard out.
      */
     protected void debugBindingCache() {
-        System.out.printf("%s Binding Cache:%n", this);
+        //System.out.printf("%s Binding Cache:%n", this);
+        System.out.printf("- Binding cache:%n");
         for (var entry : _bindingCache.entrySet()) {
             System.out.printf("  %s -> %s%n", entry.getKey(), entry.getValue());
         }

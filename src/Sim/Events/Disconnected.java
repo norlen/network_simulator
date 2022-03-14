@@ -8,4 +8,9 @@ public class Disconnected implements Event {
     public void entering(SimEnt locale) {
 
     }
+
+    @Override
+    public String toString() {
+        return String.format("Disconnected event");
+    }
 }

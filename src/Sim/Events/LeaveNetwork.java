@@ -19,4 +19,9 @@ public class LeaveNetwork implements Event {
     public void entering(SimEnt locale) {
 
     }
+
+    @Override
+    public String toString() {
+        return String.format("LeaveNetwork event");
+    }
 }

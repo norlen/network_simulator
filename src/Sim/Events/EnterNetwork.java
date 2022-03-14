@@ -30,4 +30,9 @@ public class EnterNetwork implements Event {
     public void entering(SimEnt locale) {
 
     }
+
+    @Override
+    public String toString() {
+        return String.format("EnterNetwork event, router=%s, interfaceId=%d", _router, _interfaceId);
+    }
 }

@@ -4,20 +4,16 @@ import Sim.Events.*;
 import Sim.Messages.ICMPv6.*;
 import Sim.Messages.IPv6Tunneled;
 import Sim.Messages.MobileIPv6.*;
+import Sim.Traffic.CountingSink;
 import Sim.Traffic.Sink;
 import Sim.Traffic.TrafficGenerator;
 
-// This class implements a node (host) it has an address, a peer that it communicates with
-// and it count messages send and received.
-
-// TODO: add home agent address.
-
 /**
- *
+ * A Mobile node that supports fast handovers.
  */
 public class Node extends SimEnt {
-    private record Handover(NetworkAddr newCareOfAddress, SimEnt router, int interfaceId) {
-    }
+    // Name for the node.
+    private final String _name;
 
     // Link-local address.
     protected NetworkAddr _linkLocal;
@@ -47,8 +43,17 @@ public class Node extends SimEnt {
     // Current sequence number for each packet.
     private int _seq = 0;
 
-    private final String _name;
+    // Fields that are required for us to store when performing a fast handover.
+    private record Handover(NetworkAddr newCareOfAddress, SimEnt router, int interfaceId) {
+    }
+
+    // Keep track of the state when performing a fast handover.
     private Handover _handover = null;
+
+    // Statistics for received packets.
+    private int _pktsReceived = 0;
+    private int _tunneledPktsReceived = 0;
+    private EnterNetwork _connectNext = null;
 
     public Node(String name, NetworkAddr addr, NetworkAddr haAddress, TrafficGenerator generator, Sink sink) {
         super();
@@ -60,7 +65,11 @@ public class Node extends SimEnt {
         _sink = sink;
     }
 
-    // Sets the peer to communicate with. This node is single homed
+    /**
+     * Sets the peer to communicate with. This node is single homed
+     *
+     * @param peer link to connect to.
+     */
     public void setPeer(SimEnt peer) {
         _peer = peer;
 
@@ -73,6 +82,11 @@ public class Node extends SimEnt {
         return _homeAddress;
     }
 
+    /**
+     * Gets the node's current address, which is the CoA if it is configured, otherwise it is the home address.
+     *
+     * @return node's current address.
+     */
     public NetworkAddr getCurrentAddress() {
         if (_careOfAddress != null) {
             return _careOfAddress;
@@ -119,14 +133,13 @@ public class Node extends SimEnt {
      * @param ev ICMPv6 Message.
      */
     public void processICMPMessage(ICMPv6 ev) {
+        // Unhandled packets:
+        // - RtSolPr
+        // - RouterSolicitation
         if (ev instanceof PrRtAdv msg) {
             processPrRtAdv(msg);
-        } else if (ev instanceof RtSolPr msg) {
-            // Should not get.
         } else if (ev instanceof RouterAdvertisement msg) {
             processRouterAdvertisement(msg);
-        } else if (ev instanceof RouterSolicitation msg) {
-            // Should not get.
         }
     }
 
@@ -136,18 +149,15 @@ public class Node extends SimEnt {
      * @param ev message with mobility header.
      */
     public void processMobilityHeader(MobilityHeader ev) {
-        if (ev instanceof FastBindingUpdate msg) {
-            // Should not get.
-        } else if (ev instanceof FastBindingAck msg) {
+        // Unhandled packets:
+        // - FastBindingUpdate
+        // - BindingUpdate
+        // - HandoverInitiate
+        // - HandoverAcknowledge.
+        if (ev instanceof FastBindingAck msg) {
             processFastBindingAck(msg);
-        } else if (ev instanceof BindingUpdate msg) {
-            // Should not get.
         } else if (ev instanceof BindingAck msg) {
             processBindingUpdateAck(msg);
-        } else if (ev instanceof HandoverInitiate msg) {
-            // Should not get.
-        } else if (ev instanceof HandoverAcknowledge msg) {
-            // Should not get.
         }
     }
 
@@ -161,11 +171,13 @@ public class Node extends SimEnt {
         if (ev instanceof IPv6Tunneled msg) {
             System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
             recv(src, msg.getOriginalPacket());
+            _tunneledPktsReceived += 1;
             return;
         }
 
         // Generic message, no specific handling.
         System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
+        _pktsReceived += 1;
         if (_sink != null) {
             _sink.process(src, ev);
         }
@@ -177,7 +189,7 @@ public class Node extends SimEnt {
      * @param ev connected event.
      */
     protected void processConnected(Connected ev) {
-        System.out.printf("[%d] %s: connected to new network%n", (int) SimEngine.getTime(), this);
+        System.out.printf("[%d] %s: [%s] connected to new network%n", (int) SimEngine.getTime(), this, ev);
 
         // Only send if we have not configured our IPs yet, we might have done this if we performed a fast handover.
         if (_homeAddress == null || _careOfAddress == null) {
@@ -185,6 +197,11 @@ public class Node extends SimEnt {
             // RFC 4861 (https://datatracker.ietf.org/doc/html/rfc4861) mentions that the delay may be omitted for this.
             var msg = new RouterSolicitation(NetworkAddr.UNSPECIFIED, NetworkAddr.ALL_ROUTER_MULTICAST, _seq++);
             sendMessage(msg);
+        }
+
+        // Next sink counter.
+        if (_sink instanceof CountingSink sink) {
+            sink.newCount("Connected");
         }
     }
 
@@ -194,20 +211,27 @@ public class Node extends SimEnt {
      * @param ev the disconnected event.
      */
     protected void processDisconnected(Disconnected ev) {
-        System.out.printf("[%d] %s: disconnected from current network%n", (int) SimEngine.getTime(), this, ev);
+        System.out.printf("[%d] %s: [%s] disconnected from current network%n", (int) SimEngine.getTime(), this, ev);
+        if (_connectNext != null) {
+            sendMessage(_connectNext);
+            _connectNext = null;
+        } else {
+            System.out.printf("Err: %s has no router to connect to next%n", this);
+        }
+
+        // Next sink counter.
+        if (_sink instanceof CountingSink sink) {
+            sink.newCount("Disconnected");
+        }
     }
 
-    protected void processTimerEvent(TimerEvent event) {
+    /**
+     * Handle the TimerEvent, this is used to send messages.
+     *
+     * @param ignoredEv timer event.
+     */
+    protected void processTimerEvent(TimerEvent ignoredEv) {
         if (_trafficGenerator != null && _trafficGenerator.shouldSend()) {
-            if (_trafficGenerator.getMessagesSent() == 5 && _name == "MN") {
-                // Leave the current network and join the new network.
-//                System.out.printf("-- %s leaving current network and tries to join new network%n", this);
-//                sendMessage(new LeaveNetwork(getCurrentAddress()));
-//                sendMessage(new EnterNetwork(this, null, 3));
-//                _ipConfigurationCompleted = false;
-//                _careOfAddress = null;
-            }
-
             // Send message.
             var msg = new Message(_homeAddress, _dst, _seq++);
             if (_careOfAddress != null) {
@@ -228,13 +252,20 @@ public class Node extends SimEnt {
     }
 
     protected void processStartHandover(StartHandover ev) {
-        System.out.printf("[%d] %s: recv [StartHandover event]%n", (int) SimEngine.getTime(), this);
+        System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
+        if (ev.isFastHandover()) {
+            // We want to switch to a new network soon. So start the handover process.
+            var msg = new RtSolPr(getCurrentAddress(), NetworkAddr.ALL_ROUTER_MULTICAST, _seq++, ev.getNextAccessRouter(), ev.getNextInterfaceId());
+            sendMessage(msg);
 
-        // We want to switch to a new network soon. So start the handover process.
-        var msg = new RtSolPr(getCurrentAddress(), NetworkAddr.ALL_ROUTER_MULTICAST, _seq++, ev.getNextAccessRouter(), ev.getNextInterfaceId());
-        sendMessage(msg);
-
-        _handover = new Handover(null, ev.getRouter(), ev.getNextInterfaceId());
+            _handover = new Handover(null, ev.getRouter(), ev.getNextInterfaceId());
+        } else {
+            // Regular handover.
+            sendMessage(new LeaveNetwork(getCurrentAddress()));
+            _connectNext = new EnterNetwork(this, ev.getRouter(), ev.getNextInterfaceId());
+            _ipConfigurationCompleted = false;
+            _careOfAddress = null;
+        }
     }
 
     protected void processRouterAdvertisement(RouterAdvertisement ev) {
@@ -262,7 +293,7 @@ public class Node extends SimEnt {
             }
             sendMessage(msg);
         }
-        System.out.printf("%s completed IPv6 stateless auto configuration%n", this, _homeAddress, _careOfAddress);
+        System.out.printf("%s completed IPv6 stateless auto configuration%n", this);
 
         // IP configuration done. Here we should do neighbor discovery to see if this address exists on the network.
         // which is left for future work.
@@ -293,25 +324,32 @@ public class Node extends SimEnt {
         System.out.printf("[%d] %s: recv [%s]%n", (int) SimEngine.getTime(), this, ev);
 
         var LeaveEvent = new LeaveNetwork(getCurrentAddress());
-        var JoinEvent = new EnterNetwork(this, _handover.router, _handover.interfaceId);
+        _connectNext = new EnterNetwork(this, _handover.router, _handover.interfaceId);
         _careOfAddress = _handover.newCareOfAddress;
 
         System.out.printf("%s fast handover setup complete%n", this);
-
         sendMessage(LeaveEvent);
-        sendMessage(JoinEvent);
     }
 
-    public TrafficGenerator getTrafficGenerator() {
-        return _trafficGenerator;
-    }
-
-    public Sink getSink() {
-        return _sink;
-    }
-
+    /**
+     * Helper to send a message to the node's link with no delay.
+     *
+     * @param ev message to send.
+     */
     protected void sendMessage(Event ev) {
         send(_peer, ev, 0);
+    }
+
+    /**
+     * Handler for when the simulation has finished. Prints the statistics the node has gathered.
+     */
+    public void onSimulationComplete() {
+        System.out.printf("%s%n", this);
+        System.out.printf("- Packets received: %d%n", _pktsReceived);
+        System.out.printf("- Tunneled packets received: %d%n", _tunneledPktsReceived);
+        if (_sink != null && _sink instanceof CountingSink sink) {
+            sink.printCounts();
+        }
     }
 
     @Override
