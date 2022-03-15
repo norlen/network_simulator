@@ -32,8 +32,7 @@ public class Node extends SimEnt {
 
     // Link
     protected SimEnt _peer;
-
-    //
+    
     private final TrafficGenerator _trafficGenerator;
     private final Sink _sink;
 
@@ -53,6 +52,8 @@ public class Node extends SimEnt {
     // Statistics for received packets.
     private int _pktsReceived = 0;
     private int _tunneledPktsReceived = 0;
+
+    // When we leave a network we can pick which one to connect to after we have disconnected.
     private EnterNetwork _connectNext = null;
 
     public Node(String name, NetworkAddr addr, NetworkAddr haAddress, TrafficGenerator generator, Sink sink) {

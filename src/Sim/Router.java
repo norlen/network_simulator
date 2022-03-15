@@ -28,21 +28,22 @@ public class Router extends SimEnt {
     // Cache for home addresses to current care of addresses.
     private final HashMap<NetworkAddr, NetworkAddr> _bindingCache = new HashMap<>();
 
-    // Hard-coded advertisements from neighbor routers, used for proxy advertisements.
-    //private final HashMap<String, PrRtAdv> _proxyAdvertisements = new HashMap<>();
-
     // So to make this work we send proxy advertisements to other routers, so they can store those for routers that are
     // one hop away.
 
+    // Time between sending out advertisements in milliseconds.
     private int _timeBetweenAdvertisements;
 
+    // Data stored for each proxy advertisement entry.
     private record ProxyAdvertisementEntry(NetworkAddr interfaceAddr,
                                            NetworkAddr from,
                                            PrRtAdv advertisement) {
     }
 
+    // Cache of all proxy advertisements.
     private final HashMap<String, ProxyAdvertisementEntry> _proxyAdvertisements = new HashMap<>();
 
+    // Data required to store when performing a handover.
     private record FastHandover(int sequence,
                                 NetworkAddr homeAgentAddress,
                                 NetworkAddr homeAddress,
@@ -50,6 +51,7 @@ public class Router extends SimEnt {
                                 NetworkAddr nextCareOfAddress) {
     }
 
+    // Cache of the handovers in progress.
     private final HashMap<Integer, FastHandover> _handovers = new HashMap<>();
 
     // Count of how many packets we dropped, because no interface could be found for the address.

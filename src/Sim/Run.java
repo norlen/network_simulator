@@ -60,7 +60,7 @@ public class Run {
         routeNode.connectInterface(1, FNAddress, routerToRouter);
         routeNode2.connectInterface(1, HNAddress, routerToRouter);
 
-        boolean fastHandover = true;
+        boolean fastHandover = false;
         StartHandover handover;
         if (!fastHandover) {
             handover = new StartHandover(routeNode2, 3); // Regular handover.
